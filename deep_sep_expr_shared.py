@@ -2,9 +2,53 @@ import time
 from numpy import *
 from IPython.display import clear_output, display
 from matplotlib.pyplot import *
+import theano.sandbox.cuda 
+theano.sandbox.cuda.use('gpu1')
 
 eps = finfo( float32).eps;
 
+import os
+import scipy.io.wavfile as wavfile
+from numpy import *
+
+# Load a TIMIT data set
+def tset( mf = None, ff = None, dr = None):
+    # Where the files are
+    p = '/Users/svnktrm2/Dropbox/timit-wav/train/';
+
+    # Pick a speaker directory
+    if dr is None:
+        dr = random.randint( 1, 8)
+    p += 'dr%d/' % dr
+
+    # Get two random speakers
+    if mf is None:
+        mf = [name for name in os.listdir( p) if name[0] == 'm']
+        mf = random.choice( mf)
+    if ff is None:
+        ff = [name for name in os.listdir( p) if name[0] == 'f']
+        ff = random.choice( ff)
+    print ('dr%d/' % dr, mf, ff)
+
+    # Load all the wav files
+    ms = [wavfile.read(p+mf+'/'+n)[1] for n in os.listdir( p+mf) if 'wav' in n]
+    fs = [wavfile.read(p+ff+'/'+n)[1] for n in os.listdir( p+ff) if 'wav' in n]
+
+    # Find suitable test file pair
+    l1 = list( map( lambda x : x.shape[0], ms))
+    l2 = list( map( lambda x : x.shape[0], fs))
+
+    d = array( [[abs(t1-t2) for t1 in l1] for t2 in l2])
+    i = argmin( d)
+    l = max( [l1[i%10], l2[int(i/10)]])
+    ts = [pad( ms[i%10], (0,l-l1[i%10]), 'constant'), pad( fs[int(i/10)], (0,l-l2[int(i/10)]), 'constant')]
+
+    # Get training data
+    ms.pop( i%10)
+    fs.pop( int(i/10))
+    tr = [concatenate(ms), concatenate(fs)]
+
+    return list(map( lambda x : (x-mean(x))/std(x), ts)), list(map( lambda x : (x-mean(x))/std(x), tr))
 
 #
 # Load a set of files
@@ -103,8 +147,8 @@ class sound_feats:
         return abs( x)+eps
 
     # Buffer with overlap
-    def buffer( self, s):
-        return array( [s[i:i+self.sz] for i in arange( 0, len(s)-self.sz+1, self.hp)]).T
+    def buff( self, s):
+        return array( [s[int(i):int(i)+self.sz] for i in arange( 0, len(s)-self.sz+1, self.hp)]).T
 
     # Define overlap add matrix
     def oam( self, n):
@@ -115,7 +159,7 @@ class sound_feats:
 
     # Front end
     def fe( self, s):
-        C = self.F.dot( self.wn*self.buffer( s))[:self.sz/2+1,:]
+        C = self.F.dot( self.wn*self.buff( s))[:int(self.sz/2)+1,:]
         M = self.md( C)
         P = C / M
         return (M,P)
@@ -369,7 +413,7 @@ def sep_run( K, nn = False, sz = 1024, hp = None, s = 0, sw=0, sh=[0,0], dp=0, s
     
     # Load sound set
     random.seed( s)
-    Z = sound_set(4)
+    Z = sound_set(3)
 
     # Front-end details
     if hp is None:
@@ -718,47 +762,47 @@ def cnn_model( M, K=20, T=1, hh=.0001, ep=5000, d=0, hsp=0.0001, wsp=0, spb=3, b
 
 
 # Learn model using a Theano network
-def cnn_model_th( M, K=20, T=1, hh=.0001, ep=5000, d=0, wsp=0.0001):
+def cnn_model_th( M, K=20, T=1, hh=.0001, ep=5000, d=0, wsp=0.0001, dp=0):
 
-  rng = theano.tensor.shared_randomstreams.RandomStreams(0)
+    rng = theano.tensor.shared_randomstreams.RandomStreams(0)
 
-  # Shared variables to use
-  x = Th.matrix('x')
-  y = theano.shared( M.astype( theano.config.floatX))
-  d = theano.shared( float32( dp))
+    # Shared variables to use
+    x = Th.matrix('x')
+    y = theano.shared( M.astype( theano.config.floatX))
+    d = theano.shared( float32( dp))
 
-  # Network weights
-  W0 = theano.shared( sqrt( 2./(K+M.shape[0]))*random.randn( K, M.shape[0]).astype( theano.config.floatX))
-  W1 = theano.shared( sqrt( 2./(K+M.shape[0]))*random.randn( M.shape[0], K).astype( theano.config.floatX))
+    # Network weights
+    W0 = theano.shared( sqrt( 2./(K+M.shape[0]))*random.randn( K, M.shape[0]).astype( theano.config.floatX))
+    W1 = theano.shared( sqrt( 2./(K+M.shape[0]))*random.randn( M.shape[0], K).astype( theano.config.floatX))
 
-  # First layer is the transform to a non-negative subspace
-  h = psoftplus( W0.dot( x), 3.)
+    # First layer is the transform to a non-negative subspace
+    h = psoftplus( W0.dot( x), 3.)
 
-  # Dropout
-  if dp > 0:
-     h *= (1. / (1. - d) * (rng.uniform(size=h.shape) > d).astype( theano.config.floatX)).astype( theano.config.floatX)
+    # Dropout
+    if dp > 0:
+        h *= (1. / (1. - d) * (rng.uniform(size=h.shape) > d).astype( theano.config.floatX)).astype( theano.config.floatX)
 
-  # Second layer reconstructs the input
-  l1 = W1.dot( h)
-  r = psoftplus( l1, 3.)
+    # Second layer reconstructs the input
+    l1 = W1.dot( h)
+    r = psoftplus( l1, 3.)
 
-  # Approximate input using KL-like distance
-  cost = Th.mean( y * (Th.log( y+eps) - Th.log( r+eps)) - y + r) + wsp*Th.mean( abs( W1))
+    # Approximate input using KL-like distance
+    cost = Th.mean( y * (Th.log( y+eps) - Th.log( r+eps)) - y + r) + wsp*Th.mean( abs( W1))
 
-  # Make an optimizer and define the training input
-  opt = downhill.build( 'rprop', loss=cost, inputs=[x], params=[W0,W1])
-  train = downhill.Dataset( M.astype( theano.config.floatX), batch_size=0)
+    # Make an optimizer and define the training input
+    opt = downhill.build( 'rprop', loss=cost, inputs=[x], params=[W0,W1])
+    train = downhill.Dataset( M.astype( theano.config.floatX), batch_size=0)
 
-  # Train it
-  er = downhill_train( opt, train, hh, ep, None)
+    # Train it
+    er = downhill_train( opt, train, hh, ep, None)
 
-  # Get approximation
-  d = 0
-  _h,_r = theano.function( inputs = [x], outputs = [h,r], updates = [])( M.astype( theano.config.floatX))
-  o = FE.ife( _r, P)
-  sxr = bss_eval( o, 0, array([z]))
+    # Get approximation
+    d = 0
+    _h,_r = theano.function( inputs = [x], outputs = [h,r], updates = [])( M.astype( theano.config.floatX))
+    o = FE.ife( _r, P)
+    sxr = bss_eval( o, 0, array([z]))
 
-  return _r,W1.get_value(),_h.get_value(),er
+    return _r,W1.get_value(),_h.get_value(),er
 
 
 # Lasagne separate
@@ -812,48 +856,6 @@ def cnn_sep( M, W1, W2, hh=.0001, ep=5000, d=0, sp=.0001, spb=3, al='rprop'):
 
     return _r,_r1,_r2,er
 
-
-import os
-import scipy.io.wavfile as wavfile
-from numpy import *
-
-# Load a TIMIT data set
-def tset( mf = None, ff = None, dr = None):
-    # Where the files are
-    p = '/Users/svnktrm2/Dropbox/timit-wav/train/';
-
-    # Pick a speaker directory
-    if dr is None:
-        dr = random.randint( 1, 8)
-    p += 'dr%d/' % dr
-
-    # Get two random speakers
-    if mf is None:
-        mf = [name for name in os.listdir( p) if name[0] == 'm']
-        mf = random.choice( mf)
-    if ff is None:
-        ff = [name for name in os.listdir( p) if name[0] == 'f']
-        ff = random.choice( ff)
-    print ('dr%d/' % dr), mf, ff
-
-    # Load all the wav files
-    ms = [wavfile.read(p+mf+'/'+n)[1] for n in os.listdir( p+mf) if 'wav' in n]
-    fs = [wavfile.read(p+ff+'/'+n)[1] for n in os.listdir( p+ff) if 'wav' in n]
-
-    # Find suitable test file pair
-    l1 = map( lambda x : x.shape[0], ms)
-    l2 = map( lambda x : x.shape[0], fs)
-    d = array( [[abs(t1-t2) for t1 in l1] for t2 in l2])
-    i = argmin( d)
-    l = max( [l1[i%10], l2[i/10]])
-    ts = [pad( ms[i%10], (0,l-l1[i%10]), 'constant'), pad( fs[i/10], (0,l-l2[i/10]), 'constant')]
-
-    # Get training data
-    ms.pop( i%10)
-    fs.pop( i/10)
-    tr = [concatenate(ms), concatenate(fs)]
-
-    return map( lambda x : (x-mean(x))/std(x), ts), map( lambda x : (x-mean(x))/std(x), tr)
 
 
 # SDR, SIR, SAR estimation
