@@ -1,0 +1,114 @@
+% Template for ICASSP-2010 paper; to be used with:
+%          mlspconf.sty  - ICASSP/ICIP LaTeX style file adapted for MLSP, and
+%          IEEEbib.bst - IEEE bibliography style file.
+% --------------------------------------------------------------------------
+\documentclass{article}
+\usepackage{amsmath,graphicx,mlspconf}
+
+%Select one of the four copyright notices below. Only required for the camera paper submission
+
+%For papers in which all authors are employed by the US government, the copyright notice is:
+\copyrightnotice{U.S.\ Government work not protected by U.S.\ copyright}
+
+%For papers in which all authors are employed by a Crown government (UK, Canada, and Australia), the copyright notice is:
+\copyrightnotice{978-1-5090-6341-3/17/\$31.00 {\copyright}2017 Crown}
+
+%For papers in which all authors are employed by the European Union, the copyright notice is:
+\copyrightnotice{978-1-5090-6341-3/17/\$31.00 {\copyright}2017 European Union}
+
+%For all other papers the copyright notice is:
+\copyrightnotice{978-1-5090-6341-3/17/\$31.00 {\copyright}2017 IEEE}
+
+\toappear{2017 IEEE International Workshop on Machine Learning for Signal Processing, Sept.\ 25--28, 2017, Tokyo, Japan}
+
+
+% Example definitions.
+% --------------------
+\def\x{{\mathbf x}}
+\def\L{{\cal L}}
+
+% Title.
+% ------
+\title{AUTHOR GUIDELINES FOR MLSP PROCEEDINGS MANUSCRIPTS}
+%
+% Single address.
+% ---------------
+\name{Author(s) Name(s) omitted for double blind review\thanks{Thanks to XYZ agency for funding.}}
+\address{Author Affiliation(s) omitted for double blind review}
+%
+% For example:
+% ------------
+%\address{School\\
+%	Department\\
+%	Address}
+%
+% Two addresses (uncomment and modify for two-address case).
+% ----------------------------------------------------------
+%\twoauthors
+%  {A. Author-one, B. Author-two\sthanks{Thanks to XYZ agency for funding.}}
+%	{School A-B\\
+%	Department A-B\\
+%	Address A-B}
+%   Email A-B
+%  {C. Author-three, D. Author-four\sthanks{The fourth author performed the work
+%	while at ...}}
+%	{School C-D\\
+%	Department C-D\\
+%	Address C-D
+%   Email C-D}
+%
+\begin{document}
+%\ninept
+%
+
+\maketitle
+%
+\begin{abstract}
+The abstract should appear at the top of the left-hand column of text, about
+0.5 inch (12 mm) below the title area and no more than 3.125 inches (80 mm) in
+length.  Leave a 0.5 inch (12 mm) space between the end of the abstract and the
+beginning of the main text.  The abstract should contain about 100 to 150
+words, and should be identical to the abstract text submitted electronically
+along with the paper cover sheet.  All manuscripts must be in English, printed
+in black ink.
+\end{abstract}
+%
+\begin{keywords}
+One, two, three, four, five
+\end{keywords}
+%
+\section{Introduction}
+\label{sec:intro}
+
+This is a good paper. 
+
+\section{CNN-CNN Autoencoder} 
+The approximation $\hat X$ for a given spectrogram $X$ is computed as follows: 
+
+\begin{align}
+	\hat H(k,t) =& ( \sum_{f,t'} X(f,t-t') F_e(f,t',k) ) \notag \\
+	\hat X(f,t) =& \sum_k \sum_{t'} \hat H(k,t-t') F_d(f, t',k)
+\end{align}
+
+\section{RNN-CNN Autoencoder}
+This is the same as CNN-CNN case, except the computation of the activations $H$. In the CNN encoder, each filter was of finite length. With RNN-CNN version, we are attempting to use an infinite length filter. The computation of $\hat H$ is as follows: 
+
+\begin{align}
+	Z(:,k,t) =& \sigma( W Z(:,k,t-1) + U X(:,t)) \notag \\
+	\hat H(k,t) =& \sum_f Z(f,k,t)
+\end{align}
+
+
+\section{REFERENCES}
+\label{sec:ref}
+
+List and number all bibliographical references at the end of the paper.  The references can be numbered in alphabetic order or in order of appearance in the document.  When referring to them in the text, type the corresponding reference number in square brackets as shown at the end of this sentence \cite{C2}.
+
+% References should be produced using the bibtex program from suitable
+% BiBTeX files (here: strings, refs, manuals). The IEEEbib.bst bibliography
+% style file from IEEE produces unsorted bibliography list.
+% -------------------------------------------------------------------------
+\bibliographystyle{IEEEbib}
+\bibliography{strings,refs}
+
+\end{document}
