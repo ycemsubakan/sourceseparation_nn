@@ -10,20 +10,131 @@ import itertools
 import sys
 import os
 import matplotlib.pyplot as plt
+import scipy.io.wavfile as wavfile
+from music_utilities import *
+
+
+class ModLSTMCell(tf.contrib.rnn.RNNCell):
+    """Modified LSTM Cell """
+
+    def __init__(self, num_units, initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32), wform = 'diagonal', input_opt = False, model_num = None):
+        self._num_units = num_units
+        self.init = initializer
+        self.wform = wform 
+        self.input_opt = input_opt
+        self.model_num = model_num
+
+    @property
+    def state_size(self):
+        return tf.contrib.rnn.LSTMStateTuple(self._num_units, self._num_units)
+
+    @property
+    def output_size(self):
+        return self._num_units
+
+    def __call__(self, inputs, state, scope=None):
+        with tf.variable_scope(scope or type(self).__name__):  # "GRUCell"
+            
+            c, h = state
+            init = self.init
+            self.L1 = inputs.get_shape().as_list()[1]
+           
+            mats, biases = self.get_params_parallel()
+            if self.wform == 'full' or self.wform == 'diag_to_full':
+                
+                res = tf.matmul(tf.concat([h,inputs],axis=1),mats)
+                res_wbiases = tf.nn.bias_add(res, biases)
+           
+                i,j,f,o = tf.split(res_wbiases,num_or_size_splits=4,axis=1) 
+            elif self.wform == 'diagonal':
+                h_concat = tf.concat([h,h,h,h],axis=1)
+
+                W_res = tf.multiply(h_concat,mats[0])
+
+                U_res = tf.matmul(inputs,mats[1])
+
+                res = tf.add(W_res,U_res)
+                res_wbiases = tf.nn.bias_add(res, biases)
+
+                i,j,f,o = tf.split(res_wbiases,num_or_size_splits=4,axis=1) 
+                         
+            new_c = (c * tf.nn.sigmoid(f) + tf.nn.sigmoid(i)*tf.nn.tanh(j))
+
+            new_h = tf.nn.tanh(new_c) * tf.nn.sigmoid(o)
+            new_state = tf.contrib.rnn.LSTMStateTuple(new_c, new_h)
+        return new_h, new_state
+
+
+    def get_params_parallel(self):
+        if self.input_opt:
+            if self.wform == 'full':
+
+                var_scope = tf.get_variable_scope() #.name.replace('rnn2/','')
+                #first filtering 
+                vars_to_use = [var for var in self.init if var_scope in var[0]]  
+
+                #next, assign the variables   
+                for var in vars_to_use:
+                    if '/mats' in var[0]:
+                        mats_np = var[1]               
+
+                    elif '/biases' in var[0]:
+                        biases_np = var[1]
+                        
+
+                mats = tf.constant(mats)  
+                biases = tf.constant(biases)
+
+
+            return mats, biases
+
+
+        else:
+            if self.wform == 'full':
+                mats = tf.get_variable("mats", 
+                        shape = [self._num_units+self.L1,self._num_units*4], 
+                        initializer = self.init )   
+                biases = tf.get_variable("biases", 
+                        shape = [self._num_units*4], 
+                        initializer = self.init )   
+            elif self.wform == 'diagonal':
+                Ws = tf.get_variable("Ws", 
+                        shape = [1,self._num_units*4], 
+                        initializer = self.init )   
+                Umats = tf.get_variable("Umats", 
+                        shape = [self.L1,self._num_units*4], 
+                        initializer = self.init )   
+                biases = tf.get_variable("biases", 
+                        shape = [self._num_units*4], 
+                        initializer = self.init )   
+                mats = [Ws, Umats] 
+                   
+            return mats, biases
 
 class rnn(object):
     """This class has the build_graph function  that builds the rnn computation graph, and the optimizer that optimizes the model parameters given the graph handle and the data""" 
-    def __init__(self, model_specs, initializer = 'xavier'):
+    def __init__(self, model_specs, 
+            initializer = 'xavier', input_opt = False, model_num = None):
         'model specs is a dictionary'
         self.model_specs = model_specs
         self.initializer = initializer
-    
+        self.input_opt = input_opt
+        self.model_num = model_num
+
+    def save_modelvars_np(self, sess):
+        """ This function saves the variables in diagonal to full transition """ 
+
+        variables = tf.trainable_variables()
+        vars_np = [(var.name,sess.run(var)) for var in variables]
+
+        return vars_np 
+
     def build_graph(self): 
         'this function builds a graph with the specifications in self.model_specs'
         
         d = self.model_specs #unpack the model specifications
         with tf.device('/' + d['device']):
-            x = tf.placeholder(tf.float32, [None, d['batchsize'], d['L1']],"x")
+            x = tf.placeholder(tf.float32, [None, d['batchsize'+str(self.model_num)], d['L1']],"x")
             mask = tf.placeholder(tf.float32, [None])
             y = tf.placeholder(tf.float32, [None, d['L1']],"y") 
 
@@ -33,14 +144,14 @@ class rnn(object):
             hhat = self.define_model(x, seqlens = seq_lens, dropout_kps = dropout_kps)
 
             with tf.variable_scope("decoder"):
-                V_initializer = b_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
-                
-                V = tf.get_variable("V", dtype= tf.float32, 
-                        shape = [d['K'], d['L2']], initializer = V_initializer)  
-                b = tf.get_variable("b", dtype= tf.float32, 
-                        shape = [d['L2']], initializer = b_initializer)  
+                    V_initializer = b_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+                   
+                    V = tf.get_variable("V", dtype= tf.float32, 
+                            shape = [d['K'], d['L2']], initializer = V_initializer)  
+                    b = tf.get_variable("b", dtype= tf.float32, 
+                            shape = [d['L2']], initializer = b_initializer)  
 
-            yhat = tf.matmul(hhat,V) + tf.reshape(b, (1, d['L2']))
+            yhat = tf.nn.relu(tf.matmul(hhat,V) + tf.reshape(b, (1, d['L2'])))
 
             #compute the number of parameters to be trained
             tvars = tf.trainable_variables()
@@ -92,10 +203,9 @@ class rnn(object):
                              'targets':targets,
                              }
                                            
-                             
             return graph_handles
 
-    def define_model(self, x, seqlens ,dropout_kps = tf.constant([1,1])):  
+    def define_model(self, x, seqlens ,dropout_kps = tf.constant([1,1]),def_model_num = None):  
         p1 = dropout_kps[0]
         p2 = dropout_kps[1]
 
@@ -110,7 +220,7 @@ class rnn(object):
             if model == 'ss_lstm': 
                 cell = tf.contrib.rnn.BasicLSTMCell(K, forget_bias=1.0)
             elif model == 'ss_gru':
-                cell = tf.contrib.rnn.GRUCell(K )  
+                cell = tf.contrib.rnn.GRUCell(K)  
 
             cell = tf.contrib.rnn.DropoutWrapper(cell, input_keep_prob=p1)
             cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layers)
@@ -128,27 +238,106 @@ class rnn(object):
         elif model == 'feed_forward':
 
             with tf.variable_scope('encoder'):
-                V_initializer = b_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
-                
-                V = tf.get_variable("V", dtype= tf.float32, 
-                        shape = [d['L1'], d['K']], initializer = V_initializer)  
-                b = tf.get_variable("b", dtype= tf.float32, 
-                        shape = [d['K']], initializer = b_initializer)  
+                if self.input_opt:
+                    vars_to_use = [var for var in self.initializer if 'model'+str(def_model_num)+'/encoder' in var[0]] 
+                    for var in vars_to_use:
+                        if '/V' in var[0]:
+                            V = tf.constant(var[1])
+                        else:
+                            b= tf.constant(var[1])
+                else:
+                    V_initializer = b_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+                    
+                    V = tf.get_variable("V", dtype= tf.float32, 
+                            shape = [d['L1'], d['K']], initializer = V_initializer)  
+                    b = tf.get_variable("b", dtype= tf.float32, 
+                            shape = [d['K']], initializer = b_initializer)  
 
             x = tf.transpose(x, [1, 0, 2])
             x = tf.unstack(x, axis = 0)
             x = tf.concat(x, axis = 0)
 
-            outputs = ( tf.matmul(x,V) + b ) 
+            outputs = tf.nn.relu( tf.matmul(x,V) + b ) 
 
             return outputs
 
-    def optimizer(self, data, rnn_handles, sess, model_n = 1):
+    def build_separation_graph(self):
+        d = self.model_specs #unpack the model specifications
+        with tf.device('/' + d['device']):
+            x1 = tf.get_variable("x1", dtype = tf.float32,
+                shape = [d['num_steps_test'], d['batchsize_t'], d['L1']])
+            x2 =  tf.get_variable("x2", dtype = tf.float32,
+                shape = [d['num_steps_test'], d['batchsize_t'], d['L1']])
+
+            mask = tf.placeholder(tf.float32, [None])
+            y = tf.placeholder(tf.float32, [None, d['L1']],"y") 
+
+            dropout_kps = tf.placeholder(tf.float32, [2], "dropout_params")
+            seq_lens = tf.placeholder(tf.int32, [None])
+            
+            hhat1 = self.define_model(x1, 
+                    seqlens = seq_lens, dropout_kps = dropout_kps, def_model_num = 1)
+            hhat2 = self.define_model(x2,
+                    seqlens = seq_lens, dropout_kps = dropout_kps, def_model_num = 2)
+
+
+            #decoder 1
+            vars_to_use = [var for var in self.initializer if 'model1/decoder' in var[0]] 
+            for var in vars_to_use:
+                if '/V' in var[0]:
+                    V1 = tf.constant(var[1])
+            else:
+                    b1 = tf.constant(var[1])
+
+            yhat1 = tf.nn.relu(tf.matmul(hhat1,V1) + b1)
+
+
+            #decoder 2
+            vars_to_use = [var for var in self.initializer if 'model2/decoder' in var[0]] 
+            for var in vars_to_use:
+                if '/V' in var[0]:
+                    V2 = tf.constant(var[1])
+            else:
+                    b2 = tf.constant(var[1])
+            
+            yhat2 = tf.nn.relu(tf.matmul(hhat2,V2) + b2)
+
+            cost = tf.reduce_sum(tf.square((y - yhat1 - yhat2)))
+
+            if d['optimizer'] == 'Adam':
+                train_step = tf.train.AdamOptimizer(d['LR']).minimize(cost)
+            elif d['optimizer'] == 'RMSProp':
+                train_step = tf.train.RMSPropOptimizer(d['LR'], 
+                                    momentum = d['momentum'],
+                                    centered = True).minimize(cost)   
+            elif d['optimizer'] == 'Adadelta':
+                train_step = tf.train.AdadeltaOptimizer(d['LR']).minimize(cost)   
+
+            #if d['task'] == 'source_sep':
+            #    relevant_inds = tf.squeeze(tf.where(tf.cast(mask,tf.bool)))
+            #    preds = tf.gather(yhat,relevant_inds) 
+            #    targets = tf.gather(y,relevant_inds) 
+            
+            #return the graph handles 
+            graph_handles = {'train_step':train_step,
+                             'y':y,
+                             'mask':mask,
+                             'cost':cost,
+                             'dropout_kps':dropout_kps,
+                             'seq_lens':seq_lens,
+                             #'relevant_inds':relevant_inds,
+                             #'targets':targets,
+                             }
+                                           
+                             
+            return graph_handles
+
+    def optimizer(self, data, rnn_handles, sess):
         """This function runs the optimizer for the given data and given rnn graph referenced by rnn_handles """
 
         d = self.model_specs # unpack the variables 
-
-        tr = SimpleDataIterator(data['Train'], num_buckets = d['num_buckets'])
+    
+        tr = SimpleDataIterator(data, num_buckets = d['num_buckets'])
         #tst = SimpleDataIterator(data['Test'])
         #valid = SimpleDataIterator(data['Validation'])
 
@@ -157,7 +346,7 @@ class rnn(object):
             t1, tr_logl = time.time(), []
             while tr.epochs == ep:
                 trb = tr.next_batch(
-                        n = d['batchsize'], 
+                        n = d['batchsize'+str(self.model_num)], 
                         task = d['task'], 
                         verbose = d['verbose'])      
 
@@ -177,40 +366,6 @@ class rnn(object):
 
             tst_logl = 0
             logls_len_total = 0
-            # while tst.epochs == ep:
-            #     tsb = tst.next_batch( n = d['batchsize'], task = d['task'], 
-            #             verbose = d['verbose'])  
-            #     
-            #     tst_feed = {rnn_handles['x']: tsb[0], 
-            #         rnn_handles['y']: tsb[1], 
-            #         rnn_handles['mask']:tsb[2],
-            #         rnn_handles['seq_lens']: tsb[3], 
-            #         rnn_handles['dropout_kps']:np.array([1,1])} 
-
-            #     logls = sess.run( rnn_handles['accuracy_nn'], tst_feed ) 
-            #     tst_logl = tst_logl + logls.sum()
-            #     logls_len_total = logls_len_total + logls.shape[0]
-
-            # tst_logl = tst_logl / logls_len_total
-
-            # vld_logl = 0 
-            # logls_len_total = 0
-            # while valid.epochs == ep:
-            #     vlb = valid.next_batch( n = d['batchsize'], task = d['task'], 
-            #             verbose=d['verbose'])  
-            #                 
-            #     vld_feed = {rnn_handles['x']: vlb[0], 
-            #             rnn_handles['y']: vlb[1], 
-            #             rnn_handles['mask']: vlb[2],
-            #             rnn_handles['seq_lens']: vlb[3], 
-            #             rnn_handles['dropout_kps']:np.array([1,1])} 
-       
-            #     logls = sess.run( rnn_handles['accuracy_nn'], vld_feed ) 
-            #     vld_logl = vld_logl + logls.sum() 
-            #     logls_len_total = logls_len_total + logls.shape[0]
-
-            # vld_logl = vld_logl / logls_len_total
-    
             print("The Model is ",d['model'],d['wform'],
                   "Optimizer is ",d['optimizer'],
                   " ,Iteration = ", ep, 
@@ -228,9 +383,47 @@ class rnn(object):
             valid_logls.append(vld_logl)
 
         Hhat, Yhat = sess.run([rnn_handles['h'], rnn_handles['preds']], feed) 
-        pdb.set_trace()
 
         return all_times, tr_logls, test_logls, valid_logls
+
+    def input_optimizer(self, data, rnn_handles, sess):
+        d = self.model_specs # unpack the variables 
+    
+        tr = SimpleDataIterator(data, num_buckets = d['num_buckets'])
+        #tst = SimpleDataIterator(data['Test'])
+        #valid = SimpleDataIterator(data['Validation'])
+
+        all_times, tr_logls, test_logls, valid_logls = [], [], [], [] 
+        for ep in range(d['EP']):
+            t1, tr_logl = time.time(), []
+            while tr.epochs == ep:
+                trb = tr.next_batch(
+                        n = d['batchsize_t'], 
+                        task = d['task'], 
+                        verbose = d['verbose'])      
+
+                feed = {rnn_handles['y']:trb[1], 
+                        rnn_handles['mask']:trb[2],
+                        rnn_handles['seq_lens']:trb[3], 
+                        rnn_handles['dropout_kps']:d['dropout'] }  
+
+                tr_cost,_ = sess.run( 
+                        [rnn_handles['cost'], rnn_handles['train_step']], feed) 
+                
+                if d['verbose']:
+                    print("Training cost = ", tr_cost) 
+            t2 = time.time()
+
+        tvars = tf.trainable_variables()
+        x1hat = sess.run(tvars[0]).transpose([1,2,0])
+        x1hat = list(x1hat)
+        x1hat = np.concatenate(x1hat, axis = 1)
+
+        x2hat = sess.run(tvars[1]).transpose([1,2,0])
+        x2hat = list(x2hat)
+        x2hat = np.concatenate(x2hat, axis = 1)
+
+        return x1hat, x2hat
 
 def return_Klimits(model, wform, data):
     """We use this function to select the upper and lower limits of number of 
@@ -246,7 +439,7 @@ def return_Klimits(model, wform, data):
 
     elif model == 'feed_forward':
         min_params = 1e1; max_params = 7e7 
-        K_min, K_max = 5, 5
+        K_min, K_max = 80, 80
 
     elif model == 'tanh_lds':
         min_params = 1e1; max_params = 7e7 
@@ -287,37 +480,82 @@ def load_data(dictionary):
     """this function loads the data, and sets the associated parameters (such as output and input dimensionality and batchsize) according to the specified task, which are either text, music, speech or digits """
     task, data = dictionary['task'], dictionary['data']
 
+    #data = [generate_separationdata(L,T,step)]
     if task == 'source_sep':
         L, T, step = 150, 200, 50  
-       
-        data = [generate_separationdata(L,T,step)]
 
-        d = {'data':data, 'lengths': [T]}
-        df_train = pd.DataFrame( d )
+        #random.seed( s)
+        Z = sound_set(3)
+
+        # Front-end details
+        #if hp is None:
+        sz = 1024       
+        hp = sz/4
+        wn = reshape( np.hanning(sz+1)[:-1], (sz,1))**.5
+
+        # Make feature class
+        FE = sound_feats( sz, hp, wn)
+        al = 'rprop'
+        hh = .0001
+
+        len_th = 100
+
+        #source 1
+        M1,P = FE.fe( Z[0] )
         
-        df_test = df_valid = None
+        M1 = np.split(M1, np.arange(len_th,M1.shape[1],len_th), axis = 1)
+        lengths1 = [spec.shape[1] for spec in M1]
+        
+        d = {'data':M1, 'lengths': lengths1}
+        df_train1 = pd.DataFrame( d )
+        
+        #source 2
+        M2,P = FE.fe( Z[1] )
+        
+        M2 = np.split(M2, np.arange(len_th,M2.shape[1],len_th), axis = 1)
+        lengths2 = [spec.shape[1] for spec in M2]
+        
+        d = {'data':M2, 'lengths': lengths2}
+        df_train2 = pd.DataFrame( d )
 
-        batchsize = 1
-        L1 = L 
-        L2 = L
+        #mixtures
+        M_t, P_t = FE.fe( Z[2]+Z[3] )
+        M_t, P_t = [M_t], [P_t]
+        #M_t = np.split(M_t, np.arange(len_th, M_t.shape[1],len_th), axis = 1)
+        #P_t = np.split(P_t, np.arange(len_th, P_t.shape[1],len_th), axis = 1)
+        
+        lengths_t = [spec.shape[1] for spec in M_t]
+        
+        d = {'data':M_t, 'lengths': lengths_t, 'phase': P_t }
+        df_test = pd.DataFrame( d )
+
+
+        df_valid = None
+
+        batchsize1,batchsize2,batchsize_t = len(M1), len(M2), len(M_t)
+        L1 = L2 = M1[0].shape[0]
         outstage = 'relu'
         mapping_mode = 'seq2seq'
-        num_steps = 200
+        num_steps_test = M_t[0].shape[1]
         iterator = 'SimpleDataIterator'
         num_buckets = None
-        len_th = None
 
-    parameters = {'batchsize':batchsize,
-                  'L1':L1,
-                  'L2':L2,
+    parameters = {'batchsize1':batchsize1,'batchsize2':batchsize2,
+                  'batchsize_t':batchsize_t,
+                  'L1':L1,'L2':L2,
                   'outstage':outstage,
                   'mapping_mode':mapping_mode,
-                  'num_steps':num_steps,
+                  'num_steps_test':num_steps_test,
                   'iterator':iterator,
                   'num_buckets':num_buckets,
-                  'len_th':len_th}
+                  'len_th':len_th,
+                  'audio_files':Z,
+                  'FE':FE}
 
-    return {'Train':df_train, 'Test':df_test, 'Validation':df_valid}, parameters
+    return {'Train1':df_train1, 
+            'Train2':df_train2, 
+            'Test':df_test, 
+            'Validation':df_valid}, parameters
 
 class SimpleDataIterator():
     """
@@ -412,7 +650,4 @@ class Error(Exception):
 
 class num_paramsError(Error):
     pass
-
-
-
 
