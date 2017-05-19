@@ -133,6 +133,12 @@ class rnn(object):
         'this function builds a graph with the specifications in self.model_specs'
         
         d = self.model_specs #unpack the model specifications
+        
+        if d['activation'] == 'relu':
+            act = tf.nn.relu
+        elif d['activation'] == 'softplus':
+            act = tf.nn.softplus
+
         with tf.device('/' + d['device']):
             x = tf.placeholder(tf.float32, [None, d['batchsize'+str(self.model_num)], d['L1']],"x")
             mask = tf.placeholder(tf.float32, [None])
@@ -142,6 +148,7 @@ class rnn(object):
             seq_lens = tf.placeholder(tf.int32, [None])
             
             hhat = self.define_model(x, seqlens = seq_lens, dropout_kps = dropout_kps)
+            hhat = act(hhat) 
 
             with tf.variable_scope("decoder"):
                     V_initializer = b_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
@@ -151,7 +158,7 @@ class rnn(object):
                     b = tf.get_variable("b", dtype= tf.float32, 
                             shape = [d['L2']], initializer = b_initializer)  
 
-            yhat = tf.nn.relu(tf.matmul(hhat,V) + tf.reshape(b, (1, d['L2'])))
+            yhat = act(tf.matmul(hhat,V) + tf.reshape(b, (1, d['L2'])))
 
             #compute the number of parameters to be trained
             tvars = tf.trainable_variables()
@@ -171,7 +178,8 @@ class rnn(object):
                 self.tvars_names = [var.name for var in tvars] 
 
             #define the cost         
-            cost = tf.reduce_sum(tf.square(y - yhat))
+            eps = 1e-16
+            cost = tf.reduce_mean( y*(tf.log( y + eps ) - tf.log( yhat + eps ))  - y + yhat ) 
 
             #define the optimizer
             if d['optimizer'] == 'Adam':
@@ -214,7 +222,7 @@ class rnn(object):
         # unpack model specifications 
         d = self.model_specs
         wform, model, K, num_layers, mapping_mode, L1, L2 = d['wform'], d['model'], d['K'], d['num_layers'], d['mapping_mode'], d['L1'], d['L2']
-
+        
         if model in onedir_rnns:
 
             if model == 'ss_lstm': 
@@ -257,39 +265,50 @@ class rnn(object):
             x = tf.unstack(x, axis = 0)
             x = tf.concat(x, axis = 0)
 
-            outputs = tf.nn.relu( tf.matmul(x,V) + b ) 
+            outputs = ( tf.matmul(x,V) + b ) 
 
             return outputs
 
     def build_separation_graph(self):
         d = self.model_specs #unpack the model specifications
-        with tf.device('/' + d['device']):
-            x1 = tf.get_variable("x1", dtype = tf.float32,
-                shape = [d['num_steps_test'], d['batchsize_t'], d['L1']])
-            x2 =  tf.get_variable("x2", dtype = tf.float32,
-                shape = [d['num_steps_test'], d['batchsize_t'], d['L1']])
+        if d['activation'] == 'relu':
+            act = tf.nn.relu
+        elif d['activation'] == 'softplus':
+            act = tf.nn.softplus
 
+        with tf.device('/' + d['device']):
             mask = tf.placeholder(tf.float32, [None])
             y = tf.placeholder(tf.float32, [None, d['L1']],"y") 
 
             dropout_kps = tf.placeholder(tf.float32, [2], "dropout_params")
             seq_lens = tf.placeholder(tf.int32, [None])
-            
-            hhat1 = self.define_model(x1, 
-                    seqlens = seq_lens, dropout_kps = dropout_kps, def_model_num = 1)
-            hhat2 = self.define_model(x2,
-                    seqlens = seq_lens, dropout_kps = dropout_kps, def_model_num = 2)
+           
+            if d['separation_method'] == 'complete': 
+                x1 = tf.get_variable("x1", dtype = tf.float32,
+                    shape = [d['num_steps_test'], d['batchsize_t'], d['L1']])
+                x2 =  tf.get_variable("x2", dtype = tf.float32,
+                    shape = [d['num_steps_test'], d['batchsize_t'], d['L1']])
 
+                h1 = self.define_model(x1, 
+                        seqlens = seq_lens, dropout_kps = dropout_kps, def_model_num = 1)
+                h2 = self.define_model(x2,
+                        seqlens = seq_lens, dropout_kps = dropout_kps, def_model_num = 2)
+                h1, h2 = act(h1), act(h2)
+            else:
+                h1 = tf.get_variable("h1", dtype = tf.float32,
+                        shape = [d['num_steps_test'],d['K']] )
+                h2 = tf.get_variable("h2", dtype = tf.float32,
+                        shape = [d['num_steps_test'],d['K']] )
 
             #decoder 1
             vars_to_use = [var for var in self.initializer if 'model1/decoder' in var[0]] 
             for var in vars_to_use:
                 if '/V' in var[0]:
                     V1 = tf.constant(var[1])
-            else:
+                else:
                     b1 = tf.constant(var[1])
 
-            yhat1 = tf.nn.relu(tf.matmul(hhat1,V1) + b1)
+            y1hat = act(tf.matmul(h1,V1) + b1)
 
 
             #decoder 2
@@ -300,9 +319,15 @@ class rnn(object):
             else:
                     b2 = tf.constant(var[1])
             
-            yhat2 = tf.nn.relu(tf.matmul(hhat2,V2) + b2)
+            
+            y2hat = act(tf.matmul(h2,V2) + b2)
+            
+            yhat = y1hat + y2hat
+    
+            eps = 1e-16
+            cost = tf.reduce_mean( y*(tf.log( y + eps ) - tf.log( yhat + eps ))  - y + yhat ) 
 
-            cost = tf.reduce_sum(tf.square((y - yhat1 - yhat2)))
+            #cost = tf.reduce_sum(tf.square((y - yhat1 - yhat2)))
 
             if d['optimizer'] == 'Adam':
                 train_step = tf.train.AdamOptimizer(d['LR']).minimize(cost)
@@ -313,14 +338,11 @@ class rnn(object):
             elif d['optimizer'] == 'Adadelta':
                 train_step = tf.train.AdadeltaOptimizer(d['LR']).minimize(cost)   
 
-            #if d['task'] == 'source_sep':
-            #    relevant_inds = tf.squeeze(tf.where(tf.cast(mask,tf.bool)))
-            #    preds = tf.gather(yhat,relevant_inds) 
-            #    targets = tf.gather(y,relevant_inds) 
-            
             #return the graph handles 
             graph_handles = {'train_step':train_step,
                              'y':y,
+                             'y1hat':y1hat,
+                             'y2hat':y2hat,
                              'mask':mask,
                              'cost':cost,
                              'dropout_kps':dropout_kps,
@@ -394,7 +416,7 @@ class rnn(object):
         #valid = SimpleDataIterator(data['Validation'])
 
         all_times, tr_logls, test_logls, valid_logls = [], [], [], [] 
-        for ep in range(d['EP']):
+        for ep in range(1*d['EP']):
             t1, tr_logl = time.time(), []
             while tr.epochs == ep:
                 trb = tr.next_batch(
@@ -411,19 +433,23 @@ class rnn(object):
                         [rnn_handles['cost'], rnn_handles['train_step']], feed) 
                 
                 if d['verbose']:
-                    print("Training cost = ", tr_cost) 
+                    print("Iteration ", ep,"Training cost = ", tr_cost) 
             t2 = time.time()
 
-        tvars = tf.trainable_variables()
-        x1hat = sess.run(tvars[0]).transpose([1,2,0])
-        x1hat = list(x1hat)
-        x1hat = np.concatenate(x1hat, axis = 1)
+        
+        y1hat = sess.run(rnn_handles['y1hat'],feed).transpose()
+        y2hat = sess.run(rnn_handles['y2hat'],feed).transpose()
 
-        x2hat = sess.run(tvars[1]).transpose([1,2,0])
-        x2hat = list(x2hat)
-        x2hat = np.concatenate(x2hat, axis = 1)
+        #tvars = tf.trainable_variables()
+        #x1hat = sess.run(tvars[0]).transpose([1,2,0])
+        #x1hat = list(x1hat)
+        #x1hat = np.concatenate(x1hat, axis = 1)
 
-        return x1hat, x2hat
+        #x2hat = sess.run(tvars[1]).transpose([1,2,0])
+        #x2hat = list(x2hat)
+        #x2hat = np.concatenate(x2hat, axis = 1)
+
+        return y1hat, y2hat
 
 def return_Klimits(model, wform, data):
     """We use this function to select the upper and lower limits of number of 
@@ -439,7 +465,7 @@ def return_Klimits(model, wform, data):
 
     elif model == 'feed_forward':
         min_params = 1e1; max_params = 7e7 
-        K_min, K_max = 80, 80
+        K_min, K_max = 10, 10
 
     elif model == 'tanh_lds':
         min_params = 1e1; max_params = 7e7 

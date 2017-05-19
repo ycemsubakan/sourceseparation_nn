@@ -19,7 +19,6 @@ def model_driver(d,data):
     # Reset graph
     tf.reset_default_graph()
    
-    #build the first graph
     config = tf.ConfigProto(log_device_placement = False)
     config.gpu_options.allow_growth=True
     config.allow_soft_placement=True
@@ -59,7 +58,6 @@ def model_driver(d,data):
     with tf.Session(config = config) as sess:
         sess.run(tf.initialize_all_variables())
     
-        pdb.set_trace()
         x1hat, x2hat = rnn_sep_opt.input_optimizer(data = data['Test'], 
                                     rnn_handles = rnn_sep_opt_handles, sess = sess) 
 
@@ -71,6 +69,7 @@ def model_driver(d,data):
     o2 = d['FE'].ife( x2hat * (mixture/(x1hat+x2hat)), phase)
     sxr = bss_eval( o1, 0, vstack( (Z[2],Z[3]))) + bss_eval( o2, 1, vstack( (Z[2],Z[3])))
     
+    print('BSS eval values are: ',str(sxr))
     pdb.set_trace()
 
     res_dictionary = {'valid':  np.array(valid_logls), 
@@ -177,6 +176,8 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'lr_min':-4, 'lr_max':-2, #the lower and upper limits for the exponent of the learning rate
             'num_layers_min':1, 'num_layers_max':3, #lower and upper limits for number of layers
             'optimizer':'RMSProp', #options are, Adam, RMSProp, Adadelta
-            'notes':'I am trying the gated_wf model; with n layers in {1,3} on ptb. K is in range {200,...,400}, I have just added iterations over batches'}
+            'activation':'softplus',
+            'separation_method':'complete',
+            'notes':''} 
 
 perfs = main(input_dictionary)
