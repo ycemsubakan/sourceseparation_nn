@@ -18,10 +18,16 @@ def model_driver(d,data):
     """
     # Reset graph
     tf.reset_default_graph()
-   
+    
+    # device configuration
     config = tf.ConfigProto(log_device_placement = False)
     config.gpu_options.allow_growth=True
     config.allow_soft_placement=True
+
+    model_categories = {'one_basis_rnns': ['ob_mod_lstm','ob_gru'],
+                        'mult_basis_rnns' : ['mb_mod_lstm','mb_mod_lstm']}
+    d.update(model_categories)
+
 
     #build graphs
     with tf.variable_scope("model1"):
@@ -70,10 +76,9 @@ def model_driver(d,data):
     sxr = bss_eval( o1, 0, vstack( (Z[2],Z[3]))) + bss_eval( o2, 1, vstack( (Z[2],Z[3])))
     
     print('BSS eval values are: ',str(sxr))
-    pdb.set_trace()
 
-    res_dictionary = {'valid':  np.array(valid_logls), 
-                  'tst':  np.array(test_logls), 
+    res_dictionary = {'valid':  None, 
+                  'tst':  np.array(sxr), 
                   'tr': np.array(tr_logls), 
                   'all_times':all_times, 
                   'tnparams':rnn1.tnparams}
@@ -97,7 +102,7 @@ def main(dictionary):
     lr_min ,lr_max = dictionary['lr_min'], dictionary['lr_max']
     num_layers_min, num_layers_max = dictionary['num_layers_min'], dictionary['num_layers_max']
     K_min, K_max, min_params, max_params = return_Klimits(
-            model = dictionary['model'], 
+            model = dictionary['encoder'], 
             wform = dictionary['wform'], 
             data = dictionary['data']) 
 
@@ -123,13 +128,18 @@ def main(dictionary):
                 
                 try: # Sometimes resources may get exhausted, this exception handles that 
                     dictionary.update({'LR': lr, 
-                                        'K': K, 
+                                        'K': K,
+                                        'K_in':10, # include this in search later
                                         'num_layers': num_layers,
                                         'min_params': min_params,
                                         'max_params': max_params,
                                         'momentum' : momentum} ) 
                     run_info = model_driver(d = dictionary, data = data) 
-                       
+                    
+                    #remove the unnecessary big fields
+                    run_info.pop('FE')
+                    run_info.pop('audio_files')
+
                     #append the performance records
                     records.append(run_info)
                 except KeyboardInterrupt:
@@ -146,7 +156,8 @@ def main(dictionary):
         savedir = 'experiment_data/'
         np.save( savedir + dictionary['server'] 
                 + '_data_' + dictionary['data'] 
-                + '_model_' + dictionary['model'] 
+                + '_encoder_' + dictionary['encoder']
+                + '_decoder_' + dictionary['decoder']
                 + '_'+ dictionary['wform_global'] 
                 + '_optimizer_' + dictionary['optimizer']
                 +'_device_'+ dictionary['device']
@@ -159,22 +170,23 @@ def main(dictionary):
 wform = 'full'# either diagonal or full
 input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is for numpy, second is for tensorflow 
             'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
-            'data' : 'toy', #the dataset, options are inside the load_data function 
-            'model': 'feed_forward', #options are: mod_lstm (our custom cell), lstm (tensor flow's lstm cell), gated_wf (our custom gru cell), gru (tensor flow's gru cell), mod_rnn (our custom rnn cell) 
+            'data' : 'timit', #the dataset, options are inside the load_data function 
+            'encoder': 'mb_mod_lstm', #options are: mod_lstm (our custom cell), lstm (tensor flow's lstm cell), gated_wf (our custom gru cell), gru (tensor flow's gru cell), mod_rnn (our custom rnn cell) 
+            'decoder': 'feed_forward',
             'wform' : wform, 
             'wform_global' : wform,
-            'num_configs' : 1, #number of hyper parameter configurations to be tried 
+            'num_configs' : 60, #number of hyper parameter configurations to be tried 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
-            'EP' : 2000, #number of epochs per run 
+            'EP' : 1000, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
-            'device' : 'gpu:1', #the device to be used in the computations 
+            'device' : 'gpu:0', #the device to be used in the computations 
             'server': socket.gethostname(),
             'verbose': True, #this prints out the batch location
             'load_hparams': False, #this loads hyper-parameters from a results file
             'count_mode': False, #if this is True, the code will stop after printing the number of trainable parameters
             'init':'xavier', #initialization method, options are 'xavier','random_unform' 
             'lr_min':-4, 'lr_max':-2, #the lower and upper limits for the exponent of the learning rate
-            'num_layers_min':1, 'num_layers_max':3, #lower and upper limits for number of layers
+            'num_layers_min':1, 'num_layers_max':1, #lower and upper limits for number of layers
             'optimizer':'RMSProp', #options are, Adam, RMSProp, Adadelta
             'activation':'softplus',
             'separation_method':'complete',

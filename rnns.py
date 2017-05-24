@@ -9,7 +9,7 @@ import _pickle as pickle
 import itertools
 import sys
 import os
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import scipy.io.wavfile as wavfile
 from music_utilities import *
 
@@ -68,22 +68,24 @@ class ModLSTMCell(tf.contrib.rnn.RNNCell):
     def get_params_parallel(self):
         if self.input_opt:
             if self.wform == 'full':
-
-                var_scope = tf.get_variable_scope() #.name.replace('rnn2/','')
+                
+                var_scope = 'model' + str(self.model_num) + '/' + tf.get_variable_scope().name
+                #.name.replace('rnn2/','')
+                
                 #first filtering 
                 vars_to_use = [var for var in self.init if var_scope in var[0]]  
 
                 #next, assign the variables   
                 for var in vars_to_use:
                     if '/mats' in var[0]:
-                        mats_np = var[1]               
+                        mats = tf.constant( var[1] )               
 
                     elif '/biases' in var[0]:
-                        biases_np = var[1]
+                        biases = tf.constant( var[1] )
                         
 
-                mats = tf.constant(mats)  
-                biases = tf.constant(biases)
+                #mats = tf.constant(mats)  
+                #biases = tf.constant(biases)
 
 
             return mats, biases
@@ -147,18 +149,54 @@ class rnn(object):
             dropout_kps = tf.placeholder(tf.float32, [2], "dropout_params")
             seq_lens = tf.placeholder(tf.int32, [None])
             
-            hhat = self.define_model(x, seqlens = seq_lens, dropout_kps = dropout_kps)
+            #encoder 
+            hhat = self.define_encoder(x, seqlens = seq_lens, dropout_kps = dropout_kps)
             hhat = act(hhat) 
 
-            with tf.variable_scope("decoder"):
-                    V_initializer = b_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+            #decoder
+            if d['decoder'] == 'feed_forward': 
+                with tf.variable_scope("decoder"):
+                    initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
                    
                     V = tf.get_variable("V", dtype= tf.float32, 
-                            shape = [d['K'], d['L2']], initializer = V_initializer)  
+                            shape = [d['K'], d['L2']], initializer = initializer)  
                     b = tf.get_variable("b", dtype= tf.float32, 
-                            shape = [d['L2']], initializer = b_initializer)  
+                            shape = [d['L2']], initializer = initializer)  
 
-            yhat = act(tf.matmul(hhat,V) + tf.reshape(b, (1, d['L2'])))
+                yhat = act(tf.matmul(hhat,V) + tf.reshape(b, (1, d['L2'])))
+            
+            elif d['decoder'] in d['mult_basis_rnns']:
+                with tf.variable_scope("decoder"):
+                    initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+                    #K_encoder = hhat.get_shape().as_list()[-1]
+
+                    if d['decoder'] == 'mb_mod_lstm': 
+                        cell = ModLSTMCell(d['K']*d['K_in'], initializer = initializer,
+                                input_opt = self.input_opt, wform = d['wform'])   
+                    elif d['decoder'] == 'mb_gru':
+                        cell = tf.contrib.rnn.GRUCell(d['K']*d['K_in'])  
+
+                    cell = tf.contrib.rnn.DropoutWrapper(cell, input_keep_prob=d['dropout'][0])
+                    cell = tf.contrib.rnn.MultiRNNCell([cell] * d['num_layers'])
+                    cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=d['dropout'][1])
+                
+                    outputs, _= tf.nn.dynamic_rnn(cell, hhat, dtype=tf.float32, 
+                        time_major = True, sequence_length = seq_lens )
+
+                    outputs = tf.transpose(outputs, [1,0,2] ) 
+                    outputs = tf.unstack(outputs,axis = 0)
+                    outputs = tf.concat(outputs, axis = 0)
+
+                    outputs_split = tf.split(outputs, num_or_size_splits = int(d['K']), axis = 1) 
+                    outputs_stack = tf.stack(outputs_split)
+                    outputs = act(tf.reduce_mean(outputs_stack, axis = 0))
+
+                    V = tf.get_variable("V", dtype= tf.float32, 
+                            shape = [d['K'], d['L2']], initializer = initializer)  
+                    b = tf.get_variable("b", dtype= tf.float32, 
+                            shape = [d['L2']], initializer = initializer)  
+
+                    yhat = act(tf.matmul(outputs,V) + tf.reshape(b, (1, d['L2'])))
 
             #compute the number of parameters to be trained
             tvars = tf.trainable_variables()
@@ -167,7 +205,7 @@ class rnn(object):
 
             if d['count_mode']:
                 print('The total number of parameters to be trained =', tnparams,
-                      'The model is: ', d['model'])
+                      'The model is: ', d['decoder'])
                 os._exit(0)
 
             #raise an error if we are outside the allowed range
@@ -213,22 +251,31 @@ class rnn(object):
                                            
             return graph_handles
 
-    def define_model(self, x, seqlens ,dropout_kps = tf.constant([1,1]),def_model_num = None):  
+    def define_encoder(self, x, seqlens ,dropout_kps = tf.constant([1,1]),def_model_num = None ):  
         p1 = dropout_kps[0]
         p2 = dropout_kps[1]
 
-        onedir_rnns = ['ss_lstm','ss_gru']
-
         # unpack model specifications 
         d = self.model_specs
-        wform, model, K, num_layers, mapping_mode, L1, L2 = d['wform'], d['model'], d['K'], d['num_layers'], d['mapping_mode'], d['L1'], d['L2']
+        wform, model, K, num_layers, mapping_mode, L1, L2 = d['wform'], d['encoder'], d['K'], d['num_layers'], d['mapping_mode'], d['L1'], d['L2']
         
-        if model in onedir_rnns:
+        if model in d['one_basis_rnns']:
+            
+            if self.input_opt: # If we are building the separation graph
 
-            if model == 'ss_lstm': 
-                cell = tf.contrib.rnn.BasicLSTMCell(K, forget_bias=1.0)
-            elif model == 'ss_gru':
-                cell = tf.contrib.rnn.GRUCell(K)  
+                if model == 'ob_mod_lstm': 
+                    cell = ModLSTMCell(K, initializer = self.initializer,
+                            input_opt = self.input_opt, 
+                            wform = d['wform'], model_num = def_model_num)   
+                elif model == 'ob_gru':
+                    cell = tf.contrib.rnn.GRUCell(K)  
+            else: # If we are building the training graph
+                initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+                if model == 'ob_mod_lstm': 
+                    cell = ModLSTMCell(K, initializer = initializer,
+                            input_opt = self.input_opt, wform = d['wform'])   
+                elif model == 'ob_gru':
+                    cell = tf.contrib.rnn.GRUCell(K)  
 
             cell = tf.contrib.rnn.DropoutWrapper(cell, input_keep_prob=p1)
             cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layers)
@@ -237,12 +284,48 @@ class rnn(object):
             outputs, _= tf.nn.dynamic_rnn(cell, x, dtype=tf.float32, 
                     time_major = True, sequence_length = seqlens )
             
+            #outputs = tf.transpose(outputs, [1,0,2] ) 
+            #outputs = tf.unstack(outputs,axis = 0)
+            #outputs = tf.concat(outputs, axis = 0)
+            
+            return outputs
+
+        elif model in d['mult_basis_rnns']:
+            x_tiled = tf.tile(x, [1, 1, K]) 
+            
+            if self.input_opt: # If we are building the separation graph
+                if model == 'mb_mod_lstm': 
+                    cell = ModLSTMCell(d['K_in']*K, initializer = self.initializer,
+                            input_opt = self.input_opt, 
+                            wform = d['wform'], model_num = def_model_num)   
+                elif model == 'mb_gru':
+                    cell = tf.contrib.rnn.GRUCell(d['K_in']*K)  
+            else: # If we are building the training graph
+                initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+                if model == 'mb_mod_lstm': 
+                    cell = ModLSTMCell(d['K_in']*K, initializer = initializer,
+                            input_opt = self.input_opt, wform = d['wform'])   
+                elif model == 'mb_gru':
+                    cell = tf.contrib.rnn.GRUCell(d['K_in']*K)  
+
+            cell = tf.contrib.rnn.DropoutWrapper(cell, input_keep_prob=p1)
+            cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layers)
+            cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=p2)
+
+            outputs, _= tf.nn.dynamic_rnn(cell, x_tiled, dtype=tf.float32, 
+                    time_major = True, sequence_length = seqlens )
+
             outputs = tf.transpose(outputs, [1,0,2] ) 
             outputs = tf.unstack(outputs,axis = 0)
             outputs = tf.concat(outputs, axis = 0)
 
+            outputs_split = tf.split(outputs, axis = 1, num_or_size_splits = int(K))
+            outputs_stack = tf.stack(outputs_split)
+
+            outputs = tf.reduce_sum( outputs_stack, axis = 0) 
+
             return outputs
-        
+
         elif model == 'feed_forward':
 
             with tf.variable_scope('encoder'):
@@ -289,9 +372,9 @@ class rnn(object):
                 x2 =  tf.get_variable("x2", dtype = tf.float32,
                     shape = [d['num_steps_test'], d['batchsize_t'], d['L1']])
 
-                h1 = self.define_model(x1, 
+                h1 = self.define_encoder(x1, 
                         seqlens = seq_lens, dropout_kps = dropout_kps, def_model_num = 1)
-                h2 = self.define_model(x2,
+                h2 = self.define_encoder(x2,
                         seqlens = seq_lens, dropout_kps = dropout_kps, def_model_num = 2)
                 h1, h2 = act(h1), act(h2)
             else:
@@ -388,7 +471,7 @@ class rnn(object):
 
             tst_logl = 0
             logls_len_total = 0
-            print("The Model is ",d['model'],d['wform'],
+            print("The Model is ",d['encoder'],d['wform'],
                   "Optimizer is ",d['optimizer'],
                   " ,Iteration = ", ep, 
                   #" ,Training Accuracy", np.mean(tr_logl),
@@ -416,7 +499,7 @@ class rnn(object):
         #valid = SimpleDataIterator(data['Validation'])
 
         all_times, tr_logls, test_logls, valid_logls = [], [], [], [] 
-        for ep in range(1*d['EP']):
+        for ep in range(2*d['EP']):
             t1, tr_logl = time.time(), []
             while tr.epochs == ep:
                 trb = tr.next_batch(
@@ -459,9 +542,9 @@ def return_Klimits(model, wform, data):
         min_params = 1e1; max_params =  7e7 # in our waspaa paper we basically did not use lower and upper bounds for number of parameters
         K_min, K_max = 30, 350
 
-    elif model in ['ss_lstm']:
+    elif model in ['mb_mod_lstm']:
         min_params = 1e1; max_params = 7e7 
-        K_min, K_max = 3, 3
+        K_min, K_max = 10, 10
 
     elif model == 'feed_forward':
         min_params = 1e1; max_params = 7e7 
