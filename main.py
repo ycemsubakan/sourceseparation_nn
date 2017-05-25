@@ -25,7 +25,8 @@ def model_driver(d,data):
     config.allow_soft_placement=True
 
     model_categories = {'one_basis_rnns': ['ob_mod_lstm','ob_gru'],
-                        'mult_basis_rnns' : ['mb_mod_lstm','mb_mod_lstm']}
+                        'mult_basis_rnns' : ['mb_mod_lstm','mb_mod_lstm'],
+                        'ff_and_conv': ['feed_forward','convolutive']}
     d.update(model_categories)
 
 
@@ -172,14 +173,14 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
             'data' : 'timit', #the dataset, options are inside the load_data function 
             'encoder': 'mb_mod_lstm', #options are: mod_lstm (our custom cell), lstm (tensor flow's lstm cell), gated_wf (our custom gru cell), gru (tensor flow's gru cell), mod_rnn (our custom rnn cell) 
-            'decoder': 'feed_forward',
+            'decoder': 'convolutive',
             'wform' : wform, 
             'wform_global' : wform,
             'num_configs' : 60, #number of hyper parameter configurations to be tried 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
-            'EP' : 1000, #number of epochs per run 
+            'EP' : 2000, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
-            'device' : 'gpu:0', #the device to be used in the computations 
+            'device' : 'cpu:0', #the device to be used in the computations 
             'server': socket.gethostname(),
             'verbose': True, #this prints out the batch location
             'load_hparams': False, #this loads hyper-parameters from a results file
@@ -187,6 +188,7 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'init':'xavier', #initialization method, options are 'xavier','random_unform' 
             'lr_min':-4, 'lr_max':-2, #the lower and upper limits for the exponent of the learning rate
             'num_layers_min':1, 'num_layers_max':1, #lower and upper limits for number of layers
+            'ntaps':50, #filter length for convolutive model
             'optimizer':'RMSProp', #options are, Adam, RMSProp, Adadelta
             'activation':'softplus',
             'separation_method':'complete',

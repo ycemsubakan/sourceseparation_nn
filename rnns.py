@@ -154,9 +154,9 @@ class rnn(object):
             hhat = act(hhat) 
 
             #decoder
-            if d['decoder'] == 'feed_forward': 
+            initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+            if d['decoder'] == 'feed_forward':
                 with tf.variable_scope("decoder"):
-                    initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
                    
                     V = tf.get_variable("V", dtype= tf.float32, 
                             shape = [d['K'], d['L2']], initializer = initializer)  
@@ -164,10 +164,29 @@ class rnn(object):
                             shape = [d['L2']], initializer = initializer)  
 
                 yhat = act(tf.matmul(hhat,V) + tf.reshape(b, (1, d['L2'])))
+
+            elif d['decoder'] == 'convolutive':
+                with tf.variable_scope("decoder"):
+                    
+                    fltr = tf.get_variable("fltr", dtype = tf.float32,
+                        shape = [d['ntaps'], 1, d['K'], d['L2'] ], initializer = initializer)
+                    b = tf.get_variable("b", dtype = tf.float32,
+                        shape = [d['L2']], initializer = initializer)
+
+                    hhat_rev = tf.reverse( hhat, axis = [0])
+                    hhat_pad = tf.concat([hhat_rev, tf.zeros([d['ntaps']-1,d['K']])],
+                                        axis = 0)
+                    hhat_reshape = tf.reshape( hhat_pad, [1, -1, 1, d['K']])
+                    
+                    yhat = tf.nn.conv2d( hhat_reshape, filter =  fltr,
+                                         strides = [1,1,1,1], padding = "VALID")
+                    yhat = tf.reshape( yhat, [-1,d['L2']])
+                    yhat = tf.reverse(yhat, axis = [0])
+                    yhat = act(yhat + tf.reshape(b, (1, d['L2'])))
+           
             
             elif d['decoder'] in d['mult_basis_rnns']:
                 with tf.variable_scope("decoder"):
-                    initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
                     #K_encoder = hhat.get_shape().as_list()[-1]
 
                     if d['decoder'] == 'mb_mod_lstm': 
@@ -385,25 +404,65 @@ class rnn(object):
 
             #decoder 1
             vars_to_use = [var for var in self.initializer if 'model1/decoder' in var[0]] 
-            for var in vars_to_use:
-                if '/V' in var[0]:
-                    V1 = tf.constant(var[1])
-                else:
-                    b1 = tf.constant(var[1])
+            pdb.set_trace()
 
-            y1hat = act(tf.matmul(h1,V1) + b1)
+            if d['decoder'] == 'feed_forward':
+                for var in vars_to_use:
+                    if '/V' in var[0]:
+                        V1 = tf.constant(var[1])
+                    else:
+                        b1 = tf.constant(var[1])
 
+                y1hat = act(tf.matmul(h1,V1) + b1)
+
+            elif d['decoder'] == 'convolutive':
+                for var in vars_to_use:
+                    if '/fltr' in var[0]:
+                        fltr = tf.constant(var[1])
+                    else:
+                        b = tf.constant(var[1])
+                    
+                hhat_rev = tf.reverse( h1, axis = [0])
+                hhat_pad = tf.concat([hhat_rev, tf.zeros([d['ntaps']-1,d['K']])],
+                                    axis = 0)
+                hhat_reshape = tf.reshape( hhat_pad, [1, -1, 1, d['K']])
+                
+                yhat = tf.nn.conv2d( hhat_reshape, filter =  fltr,
+                                     strides = [1,1,1,1], padding = "VALID")
+                yhat = tf.reshape( yhat, [-1,d['L2']])
+                yhat = tf.reverse(yhat, axis = [0])
+                
+                y1hat = act(yhat + tf.reshape(b, (1, d['L2'])))
 
             #decoder 2
             vars_to_use = [var for var in self.initializer if 'model2/decoder' in var[0]] 
-            for var in vars_to_use:
-                if '/V' in var[0]:
-                    V2 = tf.constant(var[1])
-            else:
-                    b2 = tf.constant(var[1])
+            if d['decoder'] == 'feed_forward':
+                for var in vars_to_use:
+                    if '/V' in var[0]:
+                        V2 = tf.constant(var[1])
+                    else:
+                        b2 = tf.constant(var[1])
+                
+                y2hat = act(tf.matmul(h2,V2) + b2)
             
-            
-            y2hat = act(tf.matmul(h2,V2) + b2)
+            elif d['decoder'] == 'convolutive':
+                for var in vars_to_use:
+                    if '/fltr' in var[0]:
+                        fltr = tf.constant(var[1])
+                    else:
+                        b = tf.constant(var[1])
+                    
+                hhat_rev = tf.reverse( h2, axis = [0])
+                hhat_pad = tf.concat([hhat_rev, tf.zeros([d['ntaps']-1,d['K']])],
+                                    axis = 0)
+                hhat_reshape = tf.reshape( hhat_pad, [1, -1, 1, d['K']])
+                
+                yhat = tf.nn.conv2d( hhat_reshape, filter =  fltr,
+                                     strides = [1,1,1,1], padding = "VALID")
+                yhat = tf.reshape( yhat, [-1,d['L2']])
+                yhat = tf.reverse(yhat, axis = [0])
+                
+                y2hat = act(yhat + tf.reshape(b, (1, d['L2'])))
             
             yhat = y1hat + y2hat
     
