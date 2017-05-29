@@ -172,13 +172,13 @@ wform = 'full'# either diagonal or full
 input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is for numpy, second is for tensorflow 
             'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
             'data' : 'timit', #the dataset, options are inside the load_data function 
-            'encoder': 'mb_mod_lstm', #options are: mod_lstm (our custom cell), lstm (tensor flow's lstm cell), gated_wf (our custom gru cell), gru (tensor flow's gru cell), mod_rnn (our custom rnn cell) 
+            'encoder': 'convolutive', #options are: feed_forward, convolutive, mb_mod_lstm
             'decoder': 'convolutive',
             'wform' : wform, 
             'wform_global' : wform,
             'num_configs' : 60, #number of hyper parameter configurations to be tried 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
-            'EP' : 2000, #number of epochs per run 
+            'EP' : 20, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
             'device' : 'cpu:0', #the device to be used in the computations 
             'server': socket.gethostname(),

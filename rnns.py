@@ -356,12 +356,12 @@ class rnn(object):
                         else:
                             b= tf.constant(var[1])
                 else:
-                    V_initializer = b_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+                    initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
                     
                     V = tf.get_variable("V", dtype= tf.float32, 
-                            shape = [d['L1'], d['K']], initializer = V_initializer)  
+                            shape = [d['L1'], d['K']], initializer = initializer)  
                     b = tf.get_variable("b", dtype= tf.float32, 
-                            shape = [d['K']], initializer = b_initializer)  
+                            shape = [d['K']], initializer = initializer)  
 
             x = tf.transpose(x, [1, 0, 2])
             x = tf.unstack(x, axis = 0)
@@ -370,6 +370,43 @@ class rnn(object):
             outputs = ( tf.matmul(x,V) + b ) 
 
             return outputs
+        
+        elif model == 'convolutive':
+            
+            with tf.variable_scope('encoder'):
+                if self.input_opt:
+                    vars_to_use = [var for var in self.initializer if 'model'+ str(def_model_num)+'/encoder' in var[0]] 
+                    for var in vars_to_use:
+                        if '/fltr' in var[0]:
+                            fltr = tf.constant(var[1])
+                        else:
+                            b = tf.constant(var[1])
+                else:
+                    initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
+                    fltr = tf.get_variable("fltr", dtype= tf.float32, 
+                        shape = [d['ntaps'], 1, d['L1'], d['K']], 
+                        initializer = initializer)  
+                    b = tf.get_variable("b", dtype= tf.float32, 
+                        shape = [d['K']], initializer = initializer)  
+
+            x = tf.transpose(x, [1, 0, 2])
+            x = tf.unstack(x, axis = 0)
+            x = tf.concat(x, axis = 0)
+
+            x_rev = tf.reverse( x, axis = [0])
+            x_pad = tf.concat([x_rev, tf.zeros([d['ntaps']-1,d['L1']])],
+                                axis = 0)
+            x_reshape = tf.reshape( x_pad, [1, -1, 1, d['L1']])
+            
+            yhat = tf.nn.conv2d( x_reshape, filter =  fltr,
+                                 strides = [1,1,1,1], padding = "VALID")
+            yhat = tf.reshape( yhat, [-1,d['K']])
+            yhat = tf.reverse(yhat, axis = [0])
+
+            yhat = (yhat + b)
+            
+            return yhat
+
 
     def build_separation_graph(self):
         d = self.model_specs #unpack the model specifications
@@ -404,7 +441,6 @@ class rnn(object):
 
             #decoder 1
             vars_to_use = [var for var in self.initializer if 'model1/decoder' in var[0]] 
-            pdb.set_trace()
 
             if d['decoder'] == 'feed_forward':
                 for var in vars_to_use:
@@ -609,13 +645,9 @@ def return_Klimits(model, wform, data):
         min_params = 1e1; max_params = 7e7 
         K_min, K_max = 10, 10
 
-    elif model == 'tanh_lds':
-        min_params = 1e1; max_params = 7e7 
-        K_min, K_max = 50, 400
-    
-    elif model == 'vector_w_conv':
+    elif model == 'convolutive':
         min_params = 1e1; max_params = 7e7
-        K_min, K_max = 300, 600
+        K_min, K_max = 10, 10
 
     return K_min, K_max, min_params, max_params 
 
