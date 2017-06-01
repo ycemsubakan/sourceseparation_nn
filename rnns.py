@@ -338,7 +338,7 @@ class rnn(object):
             outputs = tf.unstack(outputs,axis = 0)
             outputs = tf.concat(outputs, axis = 0)
 
-            outputs_split = tf.split(outputs, axis = 1, num_or_size_splits = int(K))
+            outputs_split = tf.split(outputs, axis = 1, num_or_size_splits = int(d['K_in']))
             outputs_stack = tf.stack(outputs_split)
 
             outputs = tf.reduce_sum( outputs_stack, axis = 0) 
@@ -639,7 +639,7 @@ def return_Klimits(model, wform, data):
 
     elif model in ['mb_mod_lstm']:
         min_params = 1e1; max_params = 7e7 
-        K_min, K_max = 10, 100
+        K_min, K_max = 10, 30 
 
     elif model == 'feed_forward':
         min_params = 1e1; max_params = 7e7 
