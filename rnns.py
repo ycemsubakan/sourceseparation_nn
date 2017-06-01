@@ -5,7 +5,7 @@ import pdb
 import time
 import pandas as pd
 import sklearn.feature_extraction.text as ft
-import _pickle as pickle
+#import _pickle as pickle
 import itertools
 import sys
 import os
@@ -635,23 +635,23 @@ def return_Klimits(model, wform, data):
 
     if model in ['mod_lstm', 'lstm']:
         min_params = 1e1; max_params =  7e7 # in our waspaa paper we basically did not use lower and upper bounds for number of parameters
-        K_min, K_max = 30, 350
+        K_min, K_max = 10, 100
 
     elif model in ['mb_mod_lstm']:
         min_params = 1e1; max_params = 7e7 
-        K_min, K_max = 10, 10
+        K_min, K_max = 10, 100
 
     elif model == 'feed_forward':
         min_params = 1e1; max_params = 7e7 
-        K_min, K_max = 10, 10
+        K_min, K_max = 10, 100
 
     elif model == 'convolutive':
         min_params = 1e1; max_params = 7e7
-        K_min, K_max = 10, 10
+        K_min, K_max = 10, 100
 
     return K_min, K_max, min_params, max_params 
 
-def generate_random_hyperparams(lr_min, lr_max, K_min, K_max, num_layers_min, num_layers_max,load_hparams):
+def generate_random_hyperparams(lr_min, lr_max, K_min, K_max, num_layers_min, num_layers_max,load_hparams, num_configs = 60):
     """This function generates random hyper-parameters for hyperparameter search"""
 
     #this is for new random parameters
@@ -665,14 +665,18 @@ def generate_random_hyperparams(lr_min, lr_max, K_min, K_max, num_layers_min, nu
 
     #this loads hyperparameters from an existing file
     else:
-        exp_data = np.load('experiment_data/nmf_data_timit_model_bi_mod_lstm_diag_to_full_device_cpu:0_1490813245.npy')[load_hparams[1]]
-        lr = exp_data['LR']
-        K = exp_data['K']
-        num_layers = exp_data['num_layers']
-        try:
-            momentum = exp_data['num_layers']
-        except:
-            momentum = None
+        #exp_data = np.load('experiment_data/nmf_data_timit_model_bi_mod_lstm_diag_to_full_device_cpu:0_1490813245.npy')[load_hparams[1]]
+        #pick K in this range
+        Krange = np.round(np.arange(start = K_min, stop = K_max+1, step = 10))
+        Krange = np.tile(Krange, [int(num_configs/len(Krange)),1 ]).transpose()
+        Krange = Krange.reshape(-1)
+        K = Krange[load_hparams[1]]
+        
+        lr_exp = np.random.uniform(lr_min, lr_max)
+        lr = 10**(lr_exp)
+        
+        num_layers = np.random.choice(np.arange(num_layers_min, num_layers_max + 1),1)[0]
+        momentum = np.random.uniform(0,1)
 
     return lr, K, num_layers, momentum
 

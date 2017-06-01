@@ -172,18 +172,18 @@ wform = 'full'# either diagonal or full
 input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is for numpy, second is for tensorflow 
             'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
             'data' : 'timit', #the dataset, options are inside the load_data function 
-            'encoder': 'convolutive', #options are: feed_forward, convolutive, mb_mod_lstm
-            'decoder': 'convolutive',
+            'encoder': 'mb_mod_lstm', #options are: feed_forward, convolutive, mb_mod_lstm
+            'decoder': 'feed_forward',
             'wform' : wform, 
             'wform_global' : wform,
             'num_configs' : 60, #number of hyper parameter configurations to be tried 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
-            'EP' : 20, #number of epochs per run 
+            'EP' : 2000, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
-            'device' : 'cpu:0', #the device to be used in the computations 
+            'device' : 'gpu:1', #the device to be used in the computations 
             'server': socket.gethostname(),
             'verbose': True, #this prints out the batch location
-            'load_hparams': False, #this loads hyper-parameters from a results file
+            'load_hparams': True, #this loads hyper-parameters from a results file
             'count_mode': False, #if this is True, the code will stop after printing the number of trainable parameters
             'init':'xavier', #initialization method, options are 'xavier','random_unform' 
             'lr_min':-4, 'lr_max':-2, #the lower and upper limits for the exponent of the learning rate
