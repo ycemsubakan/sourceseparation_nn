@@ -680,7 +680,7 @@ def generate_random_hyperparams(lr_min, lr_max, K_min, K_max, num_layers_min, nu
 
     return lr, K, num_layers, momentum
 
-def load_data(dictionary):
+def load_data(dictionary, ntrial):
     """this function loads the data, and sets the associated parameters (such as output and input dimensionality and batchsize) according to the specified task, which are either text, music, speech or digits """
     task, data = dictionary['task'], dictionary['data']
 
@@ -689,7 +689,8 @@ def load_data(dictionary):
         L, T, step = 150, 200, 50  
 
         #random.seed( s)
-        Z = sound_set(3)
+        #we pick the set according to trial number 
+        Z = sound_set(3, selector = np.mod(ntrial, 8) + 1 ) 
 
         # Front-end details
         #if hp is None:

@@ -90,11 +90,7 @@ def model_driver(d,data):
 
 def main(dictionary):
 
-    # first get the data and the resulting model parameters  
-    data, parameters = load_data(dictionary = dictionary)
-    dictionary.update(parameters) # add the necessary model parameters to the dictionary here
-    
-    ### next thing is determining the hyperparameters
+        ### next thing is determining the hyperparameters
     np.random.seed( dictionary['seedin'][0] )
     tf.set_random_seed( dictionary['seedin'][1] ) 
     timestamp = str(round(time.time()))
@@ -109,6 +105,11 @@ def main(dictionary):
 
     records = [] #information will accumulate in this
     for i in range(dictionary['num_configs']):
+        
+        # first get the data and the resulting model parameters  
+        data, parameters = load_data(dictionary = dictionary, ntrial = i)
+        dictionary.update(parameters) # add the necessary model parameters to the dictionary here
+
         while True:  
             try:
                 lr, K, num_layers, momentum = generate_random_hyperparams(
@@ -173,12 +174,12 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
             'data' : 'timit', #the dataset, options are inside the load_data function 
             'encoder': 'mb_mod_lstm', #options are: feed_forward, convolutive, mb_mod_lstm
-            'decoder': 'feed_forward',
+            'decoder': 'convolutive',
             'wform' : wform, 
             'wform_global' : wform,
             'num_configs' : 60, #number of hyper parameter configurations to be tried 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
-            'EP' : 2000, #number of epochs per run 
+            'EP' : 1, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
             'device' : 'gpu:1', #the device to be used in the computations 
             'server': socket.gethostname(),

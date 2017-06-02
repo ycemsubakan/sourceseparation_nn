@@ -1,10 +1,13 @@
 from numpy import *
 import scipy.io.wavfile as wavfile
 import os
+import pdb 
+
 eps = finfo( float32).eps;
 
 def tset( mf = None, ff = None, dr = None):
     # Where the files are
+    # p = '~/Dropbox/timit/timit-wav/train/' 
     p = '/usr/local/timit/timit-wav/train/'
 
     # Pick a speaker directory
@@ -42,7 +45,7 @@ def tset( mf = None, ff = None, dr = None):
     return list(map( lambda x : (x-mean(x))/std(x), ts)), list(map( lambda x : (x-mean(x))/std(x), tr))
 
 
-def sound_set( tp):
+def sound_set( tp , selector):
     import scipy.io.wavfile as wavfile
 
     # Two sinusoids signal
@@ -79,7 +82,7 @@ def sound_set( tp):
 
     # TIMIT male/female set
     elif tp == 3:
-        ts,tr = tset( 'fbjl0', 'mwsh0', 5)
+        ts,tr = tset( 'fbjl0', 'mwsh0', selector )
         # ts,tr = tset( 'falr0', 'mtqc0', 4)
         # ts,tr = tset()
         sr = 16000
