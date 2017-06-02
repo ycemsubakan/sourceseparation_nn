@@ -5,9 +5,9 @@ import pdb
 
 eps = finfo( float32).eps;
 
+# Load a TIMIT data set
 def tset( mf = None, ff = None, dr = None):
     # Where the files are
-    # p = '~/Dropbox/timit/timit-wav/train/' 
     p = '/usr/local/timit/timit-wav/train/'
 
     # Pick a speaker directory
@@ -42,10 +42,10 @@ def tset( mf = None, ff = None, dr = None):
     fs.pop( int(i/10))
     tr = [concatenate(ms), concatenate(fs)]
 
-    return list(map( lambda x : (x-mean(x))/std(x), ts)), list(map( lambda x : (x-mean(x))/std(x), tr))
+    return list(map( lambda x : (x-mean(x))/std(x), ts)), list(map( lambda x : (x-mean(x))/std(x), tr)),mf,ff
 
 
-def sound_set( tp , selector):
+def sound_set( tp):
     import scipy.io.wavfile as wavfile
 
     # Two sinusoids signal
@@ -82,9 +82,9 @@ def sound_set( tp , selector):
 
     # TIMIT male/female set
     elif tp == 3:
-        ts,tr = tset( 'fbjl0', 'mwsh0', selector )
+        # ts,tr = tset( 'fbjl0', 'mwsh0', 5)
         # ts,tr = tset( 'falr0', 'mtqc0', 4)
-        # ts,tr = tset()
+        ts,tr,mf,ff = tset()
         sr = 16000
 
         tr[0] = tr[0][:min(tr[0].shape[0],tr[1].shape[0])]
@@ -109,7 +109,8 @@ def sound_set( tp , selector):
     # Show me
     #soundsc( ts1+ts2, sr)
 
-    return tr1,tr2,ts1,ts2
+    return tr1,tr2,ts1,ts2,mf,ff
+
 
 
 class sound_feats:

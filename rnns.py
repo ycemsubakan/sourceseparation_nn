@@ -671,16 +671,26 @@ def generate_random_hyperparams(lr_min, lr_max, K_min, K_max, num_layers_min, nu
         Krange = np.tile(Krange, [int(num_configs/len(Krange)),1 ]).transpose()
         Krange = Krange.reshape(-1)
         K = Krange[load_hparams[1]]
+        # pdb.set_trace()
+        set_seed = False
+        if (load_hparams[1]==0):
+            set_seed = True
+        elif (load_hparams[1]>0):
+            # pdb.set_trace()
+            if ( np.abs(Krange[(load_hparams[1])] - Krange[(load_hparams[1]-1)]) > 0):
+                set_seed = True
         
-        lr_exp = np.random.uniform(lr_min, lr_max)
-        lr = 10**(lr_exp)
-        
-        num_layers = np.random.choice(np.arange(num_layers_min, num_layers_max + 1),1)[0]
-        momentum = np.random.uniform(0,1)
+        # lr_exp = np.random.uniform(lr_min, lr_max)
+        # lr = 10**(lr_exp)
+        # num_layers = np.random.choice(np.arange(num_layers_min, num_layers_max + 1),1)[0]
+        # momentum = np.random.uniform(0,1)
+        lr = 0.001
+        num_layers = 1
+        momentum = 0.7
 
-    return lr, K, num_layers, momentum
+    return lr, K, num_layers, momentum, set_seed
 
-def load_data(dictionary, ntrial):
+def load_data(dictionary):
     """this function loads the data, and sets the associated parameters (such as output and input dimensionality and batchsize) according to the specified task, which are either text, music, speech or digits """
     task, data = dictionary['task'], dictionary['data']
 
@@ -690,7 +700,10 @@ def load_data(dictionary, ntrial):
 
         #random.seed( s)
         #we pick the set according to trial number 
-        Z = sound_set(3, selector = np.mod(ntrial, 8) + 1 ) 
+        Z_temp = sound_set(3) 
+        Z = Z_temp[0:4]
+        mf = Z_temp[4]
+        ff = Z_temp[5]
 
         # Front-end details
         #if hp is None:
@@ -755,8 +768,10 @@ def load_data(dictionary, ntrial):
                   'num_buckets':num_buckets,
                   'len_th':len_th,
                   'audio_files':Z,
-                  'FE':FE}
-
+                  'FE':FE,
+                  'mf':mf,
+                  'ff':ff}
+    
     return {'Train1':df_train1, 
             'Train2':df_train2, 
             'Test':df_test, 

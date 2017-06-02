@@ -91,7 +91,7 @@ def model_driver(d,data):
 def main(dictionary):
 
         ### next thing is determining the hyperparameters
-    np.random.seed( dictionary['seedin'][0] )
+    # np.random.seed( dictionary['seedin'][0] )
     tf.set_random_seed( dictionary['seedin'][1] ) 
     timestamp = str(round(time.time()))
 
@@ -105,20 +105,29 @@ def main(dictionary):
 
     records = [] #information will accumulate in this
     for i in range(dictionary['num_configs']):
-        
+        # np.random.seed(seed = 1234)
         # first get the data and the resulting model parameters  
-        data, parameters = load_data(dictionary = dictionary, ntrial = i)
-        dictionary.update(parameters) # add the necessary model parameters to the dictionary here
-
+        # data, parameters = load_data(dictionary = dictionary)
+        # dictionary.update(parameters) # add the necessary model parameters to the dictionary here
+        # pdb.set_trace()
         while True:  
             try:
-                lr, K, num_layers, momentum = generate_random_hyperparams(
+                # pdb.set_trace()
+                lr, K, num_layers, momentum, set_seed = generate_random_hyperparams(
                         lr_min =  lr_min, lr_max = lr_max, 
                         K_min = K_min, K_max = K_max , 
                         num_layers_min = num_layers_min, 
                         num_layers_max = num_layers_max,
-                        load_hparams = (dictionary['load_hparams'],i))
+                        load_hparams = (dictionary['load_hparams'],i),
+                        num_configs = dictionary['num_configs'])
                 
+                if set_seed:
+                    np.random.seed(1234)
+                
+                data, parameters = load_data(dictionary = dictionary)
+                dictionary.update(parameters) # add the necessary model parameters to the dictionary here
+                
+                    
                 print("Configuration ",i,
                       "K = ",K, 
                       "num_layers = ", num_layers,
@@ -173,13 +182,13 @@ wform = 'full'# either diagonal or full
 input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is for numpy, second is for tensorflow 
             'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
             'data' : 'timit', #the dataset, options are inside the load_data function 
-            'encoder': 'mb_mod_lstm', #options are: feed_forward, convolutive, mb_mod_lstm
+            'encoder': 'convolutive', #options are: feed_forward, convolutive, mb_mod_lstm
             'decoder': 'convolutive',
             'wform' : wform, 
             'wform_global' : wform,
             'num_configs' : 60, #number of hyper parameter configurations to be tried 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
-            'EP' : 1, #number of epochs per run 
+            'EP' : 2000, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
             'device' : 'gpu:1', #the device to be used in the computations 
             'server': socket.gethostname(),
@@ -189,7 +198,7 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'init':'xavier', #initialization method, options are 'xavier','random_unform' 
             'lr_min':-4, 'lr_max':-2, #the lower and upper limits for the exponent of the learning rate
             'num_layers_min':1, 'num_layers_max':1, #lower and upper limits for number of layers
-            'ntaps':50, #filter length for convolutive model
+            'ntaps':8, #filter length for convolutive model
             'optimizer':'RMSProp', #options are, Adam, RMSProp, Adadelta
             'activation':'softplus',
             'separation_method':'complete',
