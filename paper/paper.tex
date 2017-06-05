@@ -29,7 +29,7 @@
 
 % Title.
 % ------
-\title{AUTHOR GUIDELINES FOR MLSP PROCEEDINGS MANUSCRIPTS}
+\title{A Neural Network Alternative to Convolutional Audio Models for Source Separation}
 %
 % Single address.
 % ---------------
@@ -64,26 +64,30 @@
 \maketitle
 %
 \begin{abstract}
-   In this paper we propose a convolutive and recurrent neural network based extensions to autoencoders for source separation. 
 \end{abstract}
 %
 \begin{keywords}
-One, two, three, four, five
+Auto-encoders, source separation, deep learning.
 \end{keywords}
 %
 \section{Introduction}
 \label{sec:intro}
+Recently, several neural network architectures have been proposed to develop algorithms for supervised source separation and speech enhancement. (Chandna monaural, Grais Single channel, Park Fully convolutional, Venkataramani end-to-end source). Currently, these networks are trained to learn discriminative audio models extensively. In other words, the spectrogram of the mixture is given as an input to the network. The goal of the network then, is to learn suitable time-frequency masks that separate the input spectrogram into the source and the interference componenents. Thus, the networks learn a basis decomposition that often works only for a specific source-interference pair, i.e., these models are not transferable. If the interfering signal changes, these networks have to be re-trained to learn suitable models to separate the new interfering signal in the mixture from the source.  
 
-Talk about what we are doing and why it is interesting. \\
+A popular technique to learn generative audio models for supervised source separation is the use of Non-negative matrix factorization~(NMF). Non-negative matrix factorization~(NMF) approximates a matrix of non-negative elements~$\mathbf{V}\in \mathbb{R^{+}}$ as a product of the basis matrix~$\mathbf{W}$ and the activation matrix~$\mathbf{H}$. Here, the matrices $\mathbf{W},~\mathbf{H}$ are non-negative matrices themselves i.e., $\mathbf{W},~\mathbf{H}\in \mathbb{R^{+}}$, where $\mathbb{R^{+}}$ denotes the set of matrices of positive real elements. In the case of audio signals, we apply such a factorization on audio spectrograms. In this setting, the columns of $\mathbf{W}$ begin to act as representative basis vectors for the source. The rows of $\mathbf{H}$ indicate the activity of these basis vectors in time. 
+As shown in~~\cite{}(ICASSP Paper reference...), the notion of non-negative audio modeling can be easily generalized by interpreting it as a neural network. We can interpret NMF as a non-negative auto-encoder in the following manner,
+\begin{align}
+    \text{$1^{\text{st}}$ layer:~}\mathbf{H} &= g(\mathbf{W^{\ddagger}} \cdot \mathbf{X}) \\
+    \text{$2^{\text{nd}}$ layer:~}\mathbf{X} &= g(\mathbf{W} \cdot \mathbf{H})
+    \label{eq:nmfae}
+\end{align}
 
-Give some background. 
+Here, $\mathbf{X}$ represents the input spectrogram, $\mathbf{W^{\ddagger}}$ represents a form of pseudo-inverse of $\mathbf{W}$ and $g(.):\mathbf{R}\rightarrow \mathbf{R^{+}}$ is an element-wise function that maps a real number to the space of positive real numbers. As before, the columns of $\mathbf{W}$ act as representative basis vectors and the corresponding rows of $\mathbf{H}$ indicate their respective activations. Although non-negativity of the models is not explicitly guaranteed in this formulation, applying a suitable sparsity constraint allows the network to learn suitable non-negative models. Additionally, this interpretation enabled a pathway to propose multi-layer extensions by exploiting the wealth of available neural net architectures that could potentially lead to superior separation performance. 
 
-\section{Autoencoders}
+Spectrograms of speech and audio signals incorporate temporal dependencies that span multiple time frames. However, NMF and its neural net equivalent are unable to explicitly utilize these cross-frame patterns available in a spectrogram. To alleviate this drawback, Smaragdis~\cite{}(Paris convolutive speech bases) proposed a convolutive version to NMF that allows spectro-temporal patterns as representative basis elements. In this paper, we develop a neural network alternative to such convolutive audio models for supervised source separation. In doing so, we solve two fundamental problems associated with this task. The first step is to develop a suitable neural network architecture to learn convolutive audio models in an adaptive manner. Utilizing the models to separate a source from a given mixture forms the second step. The remainder of the paper is organized as follows. In section~\ref{sec:}, we develop an auto-encoder that can act as an equivalent to conv-NMF audio models. Section~\ref{sec:} proposes a novel approach to utilize these models for supervised source separation. We evaluate these models in terms of their separation performance in section~\ref{sec:} and conclude in section~\ref{cite:}.
 
-\subsection{Feed-forward Autoencoder} 
-Define standard autoencoder. Provide a toy example to illustrate the shortcomings of this. 
-
-\subsection{CNN-CNN Autoencoder} 
+\section{Convolutive NMF as an Auto-encoder}
+\label{sec:conv-nmf}
 The approximation $\hat X$ for a given spectrogram $X$ is computed as follows: 
 
 \begin{align}
@@ -91,10 +95,12 @@ The approximation $\hat X$ for a given spectrogram $X$ is computed as follows:
 	\hat X(f,t) =& \sigma_2 \left ( \sum_k \sum_{t'} \hat H(k,t-t') F_d(f, t',k) \right )
 \end{align}
 
-\subsection{Multilayer of CNN-CNN Autoencoder} 
-This loses the interpretability, but maybe good for accuracy?
 
-\subsection{RNN-CNN Autoencoder}
+
+\section{Extensions to infinite summation}
+\label{sec:rnncnn}
+The convolutive NMF model approximates a non-negative matrix~$mathbf{V}$ as follows,
+
 
 This is the same as CNN-CNN case, except the computation of the activations $H$. In the CNN encoder, each filter was of finite length. With RNN-CNN version, we are attempting to use an infinite length filter. The computation of $\hat H$ is as follows: 
 
@@ -105,12 +111,26 @@ This is the same as CNN-CNN case, except the computation of the activations $H$.
 
 Give a toy example which shows what this model can do that CNN-CNN can not. 
 
-\section{Experiments} 
+% \section{Multi-layer Extensions}
+% \label{sec:multlayer}
 
-Try each model in a given $K$ range in speech-speech source separation task.  
 
-\section{REFERENCES}
-\label{sec:ref}
+\section{Supervised Source Separation}
+\label{sec:ss}
+Describe the separation procedure.
+
+\section{Experiments}
+\label{sec:experiments}
+Try each model in a given $K$ range in speech-speech source separation task.
+
+\subsection{Experimental setup}
+\label{subsec:setup}
+
+\subsection{Results and Discussion}
+\label{subsec:results}
+
+\section{Conclusion}
+\label{sec:conclusion}
 
 
 % References should be produced using the bibtex program from suitable
@@ -118,6 +138,6 @@ Try each model in a given $K$ range in speech-speech source separation task.
 % style file from IEEE produces unsorted bibliography list.
 % -------------------------------------------------------------------------
 \bibliographystyle{IEEEbib}
-\bibliography{strings,refs}
+\bibliography{refs.bib}
 
 \end{document}
