@@ -100,7 +100,6 @@ Here, $\mathbf{W}_{i} \in \mathbb{R}_{M \times T}^{\geq0}$ acts as the $i^{\text
     \text{$2^{\text{nd}}$ layer:~}\hat{\mathbf{X}}(f,t) &= \sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)
     \label{eq:nmfcnncnn}
 \end{align}
-
 subject to non-negativity of $\mathbf{W}_{i}$ and $\mathbf{H}\geq0$. Here, we assume that the convolutional filters~$\mathbf{W},~\mathbf{W}^{\ddagger}$ have a size of $M\times T$ where, $T$ represents the depth of the convolution. In this representation, $\mathbf{W}_{i}$ and $\mathbf{H}$ correspond to the $i^{\text{th}}$ basis matrix and the activation matrix respectively. The filters of the first convolutional layer act as inverse filters in defining the auto-encoder. In the remainder of this section, we will refer to the first convolutional layer as the encoder that estimates a code from the input representation. The second convolutional layer generates an approximation of the input from the code and will be referred to as the decoder. We can simplify the non-negativity constraints by incorporating a non-linearity into the definitions of the encoder and the decoder. Thus,
 
 \begin{align}
@@ -108,8 +107,13 @@ subject to non-negativity of $\mathbf{W}_{i}$ and $\mathbf{H}\geq0$. Here, we as
     \text{$2^{\text{nd}}$ layer:~}\hat{\mathbf{X}}(f,t) &= g\left(\sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)\right)
     \label{eq:nmfcnncnn}
 \end{align}
-Here, the non-linearity $g(.):\mathbf{R}\rightarrow \mathbf{R^{\geq0}}$ applies an element-wise non-negativity constraint and ensures that the activation matrix and the reconstruction are non-negative. We now note a couple of key points about the convolutional auto-encoder. 
+Here, the non-linearity $g(.):\mathbb{R}\rightarrow \mathbb{R^{\geq0}}$ applies an element-wise non-negativity constraint and ensures that the activation matrix and the reconstruction are non-negative. We now note a couple of key points about the convolutional auto-encoder. (i) The output of the encoder gives the latent representation of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. 
 
+To train the auto-encoder and learn the basis and activation matrices, in the remainder of the paper, we apply the following approach. We minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
+\begin{equation*}
+    D\left(\mathbf{X},\hat{\mathbf{X}}\right) = \sum_{i,j} \mathbf{X}(i,j)\cdot \text{log}\frac{\mathbf{X}(i,j)}{\hat{\mathbf{X}}(i,j)} - \mathbf{X}(i,j) + \hat{\mathbf{X}}(i,j)
+\end{equation*}
+The network is trained by applying a batch gradient descent training procedure with a batchsize of (...) and the parameters updated using the RMSProp algorithm (**RMSProp reference**), with a learning rate and momentum of (..) and (..) respectively. 
 
 The approximation $\hat X$ for a given spectrogram $X$ is computed as follows: 
 
