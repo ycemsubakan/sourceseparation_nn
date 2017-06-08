@@ -73,7 +73,7 @@ Auto-encoders, source separation, deep learning.
 %
 \section{Introduction}
 \label{sec:intro}
-Recently, several neural network architectures have been proposed to develop algorithms for supervised source separation and speech enhancement. (Chandna monaural, Grais Single channel, Park Fully convolutional, Venkataramani end-to-end source). Currently, these networks are trained to learn discriminative audio models extensively. In other words, the spectrogram of the mixture is given as an input to the network. The goal of the network then, is to learn suitable time-frequency masks that separate the input spectrogram into the source and the interference componenents. Thus, the networks learn a basis decomposition that often works only for a specific source-interference pair, i.e., these models are not transferable. If the interfering signal changes, these networks have to be re-trained to learn suitable models to separate the new interfering signal in the mixture from the source. \\
+Several neural network architectures have been proposed to develop algorithms for supervised source separation and speech enhancement. (Chandna monaural, Grais Single channel, Park Fully convolutional, Venkataramani end-to-end source). Currently, these networks are trained to learn discriminative audio models extensively. In other words, the spectrogram of the mixture is given as an input to the network. The goal of the network then, is to learn suitable time-frequency masks that separate the input spectrogram into the source and the interference componenents. Thus, the networks learn a basis decomposition that often works only for a specific source-interference pair, i.e., these models are not transferable. If the interfering signal changes, these networks have to be re-trained to learn suitable models to separate the new interfering signal in the mixture from the source. \\
 
 A popular technique to learn transferable audio models for supervised source separation is the use of Nnon-negative matrix factorization~(NMF). Non-negative matrix factorization~(NMF) matrix of non-negative elements~$\mathbf{X}\in \mathbb{R}_{M\times N}^{\geq0}$ as a product of the basis matrix~$\mathbf{W}$ and the activation matrix~$\mathbf{H}$. The notation $\mathbb{R}_{M \times N}^{\geq0}$ represents the set of matrices of non-negative elements of size $M \times N$. In this factorization, the basis matrix $\mathbf{W} \in \mathbb{R}_{M \times r}^{\geq{0}}$, the activation matrix $\mathbf{H} \in \mathbb{R}_{r \times N}^{\geq{0}}$ and $r$ represents the rank of the decomposition. In the case of audio signals, we apply such a factorization on audio spectrograms. In this setting, the columns of $\mathbf{W}$ begin to act as representative basis vectors for the source. The rows of $\mathbf{H}$ indicate the activity of these basis vectors in time. As shown in~~\cite{}(ICASSP Paper reference...), the notion of non-negative audio modeling can be easily generalized by interpreting NMF as a neural network. We can interpret NMF as a non-negative auto-encoder in the following manner,
 \begin{align}
@@ -117,7 +117,7 @@ The network is trained by applying a batch gradient descent training procedure w
 
 \subsection{Practical Considerations}
 \label{subsec:practical}
-Having developed the convolutional auto-encoder equivalent to convolutive NMF, we can now begin to understand the nature of the basis and activation matrices learned by the network. To do so, we train the convolutive auto-encoder defined by~(\ref{eq:nmfcnncnn}) on a simple toy example as shown in figure~\ref{}(**Figure reference**)7
+Having developed the convolutional auto-encoder equivalent to convolutive NMF, we can now begin to understand the nature of the basis and activation matrices learned by the network. To do so, we train the convolutive auto-encoder defined by~(\ref{eq:nmfcnncnn}) on a simple toy example as shown in figure~\ref{}(**Figure reference**).
 
 % The approximation $\hat X$ for a given spectrogram $X$ is computed as follows: 
 
@@ -154,19 +154,26 @@ The previous approach to source separation~\cite{}(**ICASSP paper**) involves es
     \hat{\mathbf{X}} = Ae(\mathbf{X}|\theta)
     \label{eq:separation_ae}
 \end{equation}
-Here, $\theta$ denotes the weights (parameters) of the auto-encoder. Thus, given the trained auto-encoders for sources, i.e., given $\theta_{1}$ and $\theta_{2}$, the goal of separation is to identify suitable spectrograms $\mathbf{X}_{1}$ and $\mathbf{X}_{2}$ such that,
+Here, $\theta$ denotes the weights (parameters) of the auto-encoder. Thus, given the trained auto-encoders, i.e., given $\theta_{1}$ and $\theta_{2}$, the goal of separation is to identify suitable spectrograms $\mathbf{X}_{1}$ and $\mathbf{X}_{2}$ such that,
 \begin{equation}
     \mathbf{X}_{m} = Ae(\mathbf{X}_{1}|\theta_{1}) + Ae(\mathbf{X}_{2}|\theta_{2}) 
     \label{eq:separation}
 \end{equation}
-Here, $\mathbf{X}_{m}$ represents the spectrogram of the mixture. In other words, the separation procedure attempts to estimate the mixture spectrogram as the sum of spectrograms of the individual sources. This assumption of additivity of spectrograms is similar to the separation procedure used in~\cite{}(**NMF, Icassp**). However, we directly estimate the source spectrograms without estimating the latent representation. We train the network defined by~(\ref{eq:separation}) for an appropriate input instead of training for the weights of the network. As before, we minimize the KL divergence between mixture spectrogram $\mathbf{X}_{m}$ and its approximation~$\mathbf{X}_{1} + \mathbf{X}_{2}$. Conceptually, this problem is not different to training a neural network. The equivalence can be seen by applying a transposition to the auto-encoder definitions in (\ref{eq:nmfcnncnn}). This also allows a generalized separation procedure to be applied even when the underlying architectures of the auto-encoders are changed.
+Here, $\mathbf{X}_{m}$ represents the spectrogram of the mixture and $\mathbf{X}_{1}$,~$\mathbf{X}_{2}$ denote the separated source spectrograms. In other words, the separation procedure attempts to estimate the mixture spectrogram as the sum of spectrograms of the individual sources. This assumption of additivity of spectrograms is similar to the separation procedure used in~\cite{}(**NMF, Icassp**). However, we directly estimate the source spectrograms without estimating the latent representation. We train the network defined by~(\ref{eq:separation}) for an appropriate input instead of training for the weights of the network. As before, we minimize the KL divergence between mixture spectrogram $\mathbf{X}_{m}$ and its approximation~$\mathbf{X}_{1} + \mathbf{X}_{2}$. Conceptually, this problem is not different to training a neural network. The equivalence can be seen by applying a transposition to the auto-encoder definitions in (\ref{eq:nmfcnncnn}). This also allows a generalized separation procedure to be applied even when the underlying architectures of the auto-encoders are changed.
 
-
-
+Having obtained the contributions of the sources (separated spectrograms), the next step is to transform these spectrograms back into the time domain. This is given as,
+\begin{equation}
+    x_{i}(t) = \text{STFT}^{-1}\left(\frac{\mathbf{X_{i}}}{\sum_{i}\mathbf{X}_{i}}\odot \mathbf{X}_{m} \odot e^{i\Phi_{m}}\right)~\text{for}~i\in\{1, 2\}
+\end{equation}
+Here $x_{i}(t)$ denotes the separated speech signal in time and $\Phi_{m}$ represents the phase of the mixture. Also, $\odot$ represents the element-wise multiplication operation and the division is also element-wise.
 
 \section{Experiments}
 \label{sec:experiments}
-Try each model in a given $K$ range in speech-speech source separation task.
+We now describe the experiments used to evaluate our auto-encoder based convolutive audio models. We do so by comparing the separation performance of these models to the neural network based models proposed in~\cite{}(**ICASSP paper**). For a uniform experimental setup, we apply a separation scheme described in~\ref{sec:ss} to both the models. We compare the performance in terms of median BSS\_eval metrics~\cite{}(**BSS eval paper**) viz., signal-to-distortion (SDR), signal-to-interference (SIR) and signal-to-artifact ratio (SAR) parameters. We also compare the median intelligibility scores in terms of the STOI index~\cite{}(**STOI paper**). To compare these models, we use the TIMIT corpus~\cite{} (**Timit reference**). To form these mixtures, we randomly select a pair of male-female speakers from the TIMIT corpus. Of the $10$ utterances available for each speaker, one utterance is randomly selected for each speaker. These two selected utterances are mixed at $0 dB$ to generate the testing mixture. For the evaluation, we generate $20$ such mixtures and compare the models for different parameter configurations. As the pre-processing step, we apply a $1024$ point short-time Fourier transform representation with a hop of $25\%$. The magnitude spectrogram is then given as an input to the network. 
+
+We perform these evaluations at multiple parameter configurations with varying values for decomposition rank and filter size.
+
+*** Talk about how you vary or select the values of K and T***
 
 \subsection{Experimental setup}
 \label{subsec:setup}
