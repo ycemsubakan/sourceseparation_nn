@@ -24,73 +24,93 @@ def model_driver(d,data):
     config.gpu_options.allow_growth=True
     config.allow_soft_placement=True
 
+    if d['task'] == 'source_sep':
+        
+        #build graph 1
+        with tf.variable_scope("model1"):
+            rnn1 = rnn( model_specs = d, initializer = d['init'], model_num = 1)
+            rnn1_handles = rnn1.build_graph()  
+        
+        with tf.Session(config = config) as sess:
+            sess.run(tf.initialize_all_variables())
+            all_times, tr_logls, _, _ = rnn1.optimizer(data = data['Train1'], 
+                    rnn_handles = rnn1_handles, sess = sess)
+            
+            vars_np1 = rnn1.save_modelvars_np(sess)
+
+        tf.reset_default_graph()
+
+        #build graph 2
+        with tf.variable_scope("model2"):
+            rnn2 = rnn( model_specs = d, initializer = d['init'], model_num = 2)
+            rnn2_handles = rnn2.build_graph()  
+
+        with tf.Session(config = config) as sess:
+            sess.run(tf.initialize_all_variables())
+            all_times, tr_logls, _, _ = rnn2.optimizer(data = data['Train2'], 
+                    rnn_handles = rnn2_handles, sess = sess) 
+
+            vars_np2 = rnn2.save_modelvars_np(sess)
+
+        tf.reset_default_graph()
+
+        all_vars_np = vars_np1 + vars_np2
+
+        rnn_sep_opt = rnn( model_specs = d, initializer = all_vars_np, input_opt = True)
+        rnn_sep_opt_handles = rnn_sep_opt.build_separation_graph()
+
+        with tf.Session(config = config) as sess:
+            sess.run(tf.initialize_all_variables())
+        
+            x1hat, x2hat = rnn_sep_opt.input_optimizer(data = data['Test'], 
+                                        rnn_handles = rnn_sep_opt_handles, sess = sess) 
+
+        Z = d['audio_files']
+        mixture = np.concatenate(data['Test']['data'].values, axis = 1)    
+        phase = np.concatenate(data['Test']['phase'].values, axis = 1)    
+        
+        x1hat = x1hat[:,:mixture.shape[1]]
+        x2hat = x2hat[:,:mixture.shape[1]]
+        eps = 1e-20
+
+        o1 = d['FE'].ife( x1hat * (mixture/(x1hat+x2hat+eps)), phase)
+        o2 = d['FE'].ife( x2hat * (mixture/(x1hat+x2hat+eps)), phase)
+
+        sxr = bss_eval( o1, 0, vstack( (Z[2],Z[3]))) + bss_eval( o2, 1, vstack( (Z[2],Z[3])))
+        
+        print('BSS eval values are: ',str(sxr))
+
+        res_dictionary = {'valid':  None, 
+                      'tst':  np.array(sxr), 
+                      'tr': np.array(tr_logls), 
+                      'all_times':all_times, 
+                      'tnparams':rnn1.tnparams}
+
+        res_dictionary.update(d)
+
+        return res_dictionary
+    
+    elif d['task'] == 'toy_example': 
+        
+        with tf.variable_scope("model1"):
+            rnn1 = rnn( model_specs = d, initializer = d['init'], model_num = 1)
+            rnn1_handles = rnn1.build_graph()  
+        
+        pdb.set_trace()
+        with tf.Session(config = config) as sess:
+            sess.run(tf.initialize_all_variables())
+            all_times, tr_logls, _, _ = rnn1.optimizer(data = data, 
+                    rnn_handles = rnn1_handles, sess = sess)
+
+
+def main(dictionary):
+    #set the model categories
     model_categories = {'one_basis_rnns': ['ob_mod_lstm','ob_gru'],
                         'mult_basis_rnns' : ['mb_mod_lstm','mb_mod_lstm'],
                         'ff_and_conv': ['feed_forward','convolutive']}
-    d.update(model_categories)
+    dictionary.update(model_categories)
 
-
-    #build graphs
-    with tf.variable_scope("model1"):
-        rnn1 = rnn( model_specs = d, initializer = d['init'], model_num = 1)
-        rnn1_handles = rnn1.build_graph()  
-    
-    with tf.Session(config = config) as sess:
-        sess.run(tf.initialize_all_variables())
-        all_times, tr_logls, _, _ = rnn1.optimizer(data = data['Train1'], 
-                rnn_handles = rnn1_handles, sess = sess)
-        
-        vars_np1 = rnn1.save_modelvars_np(sess)
-
-    tf.reset_default_graph()
-
-    with tf.variable_scope("model2"):
-        rnn2 = rnn( model_specs = d, initializer = d['init'], model_num = 2)
-        rnn2_handles = rnn2.build_graph()  
-
-    with tf.Session(config = config) as sess:
-        sess.run(tf.initialize_all_variables())
-        all_times, tr_logls, _, _ = rnn2.optimizer(data = data['Train2'], 
-                rnn_handles = rnn2_handles, sess = sess) 
-
-        vars_np2 = rnn2.save_modelvars_np(sess)
-
-    tf.reset_default_graph()
-
-    all_vars_np = vars_np1 + vars_np2
-
-    rnn_sep_opt = rnn( model_specs = d, initializer = all_vars_np, input_opt = True)
-    rnn_sep_opt_handles = rnn_sep_opt.build_separation_graph()
-
-    with tf.Session(config = config) as sess:
-        sess.run(tf.initialize_all_variables())
-    
-        x1hat, x2hat = rnn_sep_opt.input_optimizer(data = data['Test'], 
-                                    rnn_handles = rnn_sep_opt_handles, sess = sess) 
-
-    Z = d['audio_files']
-    mixture = np.concatenate(data['Test']['data'].values, axis = 1)    
-    phase = np.concatenate(data['Test']['phase'].values, axis = 1)    
-    
-    o1 = d['FE'].ife( x1hat * (mixture/(x1hat+x2hat)), phase)
-    o2 = d['FE'].ife( x2hat * (mixture/(x1hat+x2hat)), phase)
-    sxr = bss_eval( o1, 0, vstack( (Z[2],Z[3]))) + bss_eval( o2, 1, vstack( (Z[2],Z[3])))
-    
-    print('BSS eval values are: ',str(sxr))
-
-    res_dictionary = {'valid':  None, 
-                  'tst':  np.array(sxr), 
-                  'tr': np.array(tr_logls), 
-                  'all_times':all_times, 
-                  'tnparams':rnn1.tnparams}
-
-    res_dictionary.update(d)
-
-    return res_dictionary
-
-def main(dictionary):
-
-        ### next thing is determining the hyperparameters
+    # next thing is determining the hyperparameters
     # np.random.seed( dictionary['seedin'][0] )
     tf.set_random_seed( dictionary['seedin'][1] ) 
     timestamp = str(round(time.time()))
@@ -180,7 +200,7 @@ def main(dictionary):
 #import matplotlib.pyplot as plt
 wform = 'full'# either diagonal or full
 input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is for numpy, second is for tensorflow 
-            'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
+            'task' : 'toy_example', #this helps us how to load the data with the load_data function in rnns.py 
             'data' : 'timit', #the dataset, options are inside the load_data function 
             'encoder': 'convolutive', #options are: feed_forward, convolutive, mb_mod_lstm
             'decoder': 'convolutive',
@@ -190,7 +210,7 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
             'EP' : 2000, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
-            'device' : 'gpu:1', #the device to be used in the computations 
+            'device' : 'gpu:2', #the device to be used in the computations 
             'server': socket.gethostname(),
             'verbose': True, #this prints out the batch location
             'load_hparams': True, #this loads hyper-parameters from a results file

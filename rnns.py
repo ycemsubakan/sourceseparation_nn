@@ -248,10 +248,9 @@ class rnn(object):
             elif d['optimizer'] == 'Adadelta':
                 train_step = tf.train.AdadeltaOptimizer(d['LR']).minimize(cost)   
 
-            if d['task'] == 'source_sep':
-                relevant_inds = tf.squeeze(tf.where(tf.cast(mask,tf.bool)))
-                preds = tf.gather(yhat,relevant_inds) 
-                targets = tf.gather(y,relevant_inds) 
+            relevant_inds = tf.squeeze(tf.where(tf.cast(mask,tf.bool)))
+            preds = tf.gather(yhat,relevant_inds) 
+            targets = tf.gather(y,relevant_inds) 
             
             #return the graph handles 
             graph_handles = {'train_step':train_step,
@@ -406,7 +405,6 @@ class rnn(object):
             yhat = (yhat + b)
             
             return yhat
-
 
     def build_separation_graph(self):
         d = self.model_specs #unpack the model specifications
@@ -695,7 +693,36 @@ def load_data(dictionary):
     task, data = dictionary['task'], dictionary['data']
 
     #data = [generate_separationdata(L,T,step)]
-    if task == 'source_sep':
+    if task == 'toy_example':
+        
+        # load the toy data as M
+        # put the length of M in lengths 1
+        L, T, step = 10, 100, 25
+        
+        M = [generate_separationdata(L,T,step)]
+        lengths = [T]
+       
+        # set the toy magnitude spectrogram as M
+        d = {'data':M, 'lengths': lengths}
+        df_train = pd.DataFrame( d )
+        
+        L1 = L2 = L
+        outstage = 'relu'
+        mapping_mode = 'seq2seq'
+        iterator = 'SimpleDataIterator'
+
+        parameters = {'batchsize1':T,
+                      'L1':L1,'L2':L2,
+                      'outstage':outstage,
+                      'mapping_mode':mapping_mode,
+                      'iterator':iterator,
+                      'num_buckets':None
+                      }
+        
+        return df_train, parameters
+
+
+    elif task == 'source_sep':
         L, T, step = 150, 200, 50  
 
         #random.seed( s)
@@ -738,44 +765,49 @@ def load_data(dictionary):
 
         #mixtures
         M_t, P_t = FE.fe( Z[2]+Z[3] )
-        M_t, P_t = [M_t], [P_t]
-        #M_t = np.split(M_t, np.arange(len_th, M_t.shape[1],len_th), axis = 1)
-        #P_t = np.split(P_t, np.arange(len_th, P_t.shape[1],len_th), axis = 1)
-        
+                
+        if dictionary['encoder'] in dictionary['mult_basis_rnns']:
+            M_t = np.split(M_t, np.arange(len_th, M_t.shape[1], len_th), axis = 1)
+            P_t = np.split(P_t, np.arange(len_th, P_t.shape[1],len_th), axis = 1)
+
+            num_steps_test = len_th
+            batchsize1, batchsize2, batchsize_t = len(M1), len(M2), len(M_t)
+        else:
+            M_t, P_t = [M_t], [P_t]
+            
+            num_steps_test = M_t[0].shape[1]
+            batchsize1, batchsize2, batchsize_t = len(M1), len(M2), len(M_t)
         lengths_t = [spec.shape[1] for spec in M_t]
         
         d = {'data':M_t, 'lengths': lengths_t, 'phase': P_t }
         df_test = pd.DataFrame( d )
-
-
+        
         df_valid = None
 
-        batchsize1,batchsize2,batchsize_t = len(M1), len(M2), len(M_t)
         L1 = L2 = M1[0].shape[0]
         outstage = 'relu'
         mapping_mode = 'seq2seq'
-        num_steps_test = M_t[0].shape[1]
         iterator = 'SimpleDataIterator'
         num_buckets = None
 
-    parameters = {'batchsize1':batchsize1,'batchsize2':batchsize2,
-                  'batchsize_t':batchsize_t,
-                  'L1':L1,'L2':L2,
-                  'outstage':outstage,
-                  'mapping_mode':mapping_mode,
-                  'num_steps_test':num_steps_test,
-                  'iterator':iterator,
-                  'num_buckets':num_buckets,
-                  'len_th':len_th,
-                  'audio_files':Z,
-                  'FE':FE,
-                  'mf':mf,
-                  'ff':ff}
-    
-    return {'Train1':df_train1, 
-            'Train2':df_train2, 
-            'Test':df_test, 
-            'Validation':df_valid}, parameters
+        parameters = {'batchsize1':batchsize1,'batchsize2':batchsize2,
+                      'batchsize_t':batchsize_t,
+                      'L1':L1,'L2':L2,
+                      'outstage':outstage,
+                      'mapping_mode':mapping_mode,
+                      'num_steps_test':num_steps_test,
+                      'iterator':iterator,
+                      'num_buckets':num_buckets,
+                      'len_th':len_th,
+                      'audio_files':Z,
+                      'FE':FE,
+                      'mf':mf,
+                      'ff':ff}
+        
+        return {'Train1':df_train1, 
+                'Train2':df_train2, 
+                'Test':df_test, 
+                'Validation':df_valid}, parameters
 
 class SimpleDataIterator():
     """
@@ -797,34 +829,7 @@ class SimpleDataIterator():
 
         part = self.df.ix[self.cursor:self.cursor+n-1]
         
-        if task == 'digits': 
-            #this part needs to be updated
-            temp = list(part['data'].values)
-            data = np.transpose(np.asarray(temp),[2,0,1])  
-            labels = part['labels'].values
-            mask = np.ones(labels.shape) 
-            lengths = part['lengths'].values
-        elif task in ['music','text']:
-            max_len = np.max(part['lengths'].values)
-            L = part['data'].values[0].shape[0] 
-           
-            lengths = np.zeros(n) 
-            mask = np.zeros((n,max_len-1))
-            labels = [np.zeros((max_len-1, L)) for i in range(n)] # better name is 'targets' 
-            data = np.zeros((L, max_len -1, n)) 
-            iterables = zip(part['lengths'].values, part['data'].values)
-            for i,vals in enumerate(iterables):
-                ln = vals[0] - 1
-                lengths[i] = ln
-                mask[i,0:ln] = 1
-                labels[i][0:ln,:] = vals[1][:,1:].transpose()
-                data[:,0:ln,i] = vals[1][:,:-1]
-
-            #finally reshape things
-            mask = mask.reshape(-1)
-            labels = np.concatenate(labels, axis = 0)
-            data = np.transpose(data, [1,2,0]) 
-        if task == 'source_sep':
+        if task in ['source_sep', 'toy_example']:
             max_len = np.max(part['lengths'].values)
             L = part['data'].values[0].shape[0] 
            
