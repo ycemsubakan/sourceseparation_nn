@@ -115,6 +115,12 @@ To train the auto-encoder and learn the basis and activation matrices, in the re
 \end{equation*}
 The network is trained by applying a batch gradient descent training procedure with a batchsize of (...) and the parameters updated using the RMSProp algorithm (**RMSProp reference**), with a learning rate and momentum of (..) and (..) respectively. 
 
+\begin{figure}[t]
+\centering
+  \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\linewidth]{Figs/CNN_demo.png}
+  \caption{...}~\label{fig:cnn_demo}
+\end{figure}
+
 \subsection{Practical Considerations}
 \label{subsec:practical}
 Having developed the convolutional auto-encoder equivalent to convolutive NMF, we can now begin to understand the nature of the basis and activation matrices learned by the network. To do so, we train the convolutive auto-encoder defined by~(\ref{eq:nmfcnncnn}) on a simple toy example as shown in figure~\ref{}(**Figure reference**).
@@ -165,18 +171,22 @@ Having obtained the contributions of the sources (separated spectrograms), the n
 \begin{equation}
     x_{i}(t) = \text{STFT}^{-1}\left(\frac{\mathbf{X_{i}}}{\sum_{i}\mathbf{X}_{i}}\odot \mathbf{X}_{m} \odot e^{i\Phi_{m}}\right)~\text{for}~i\in\{1, 2\}
 \end{equation}
-Here $x_{i}(t)$ denotes the separated speech signal in time and $\Phi_{m}$ represents the phase of the mixture. Also, $\odot$ represents the element-wise multiplication operation and the division is also element-wise.
+Here $x_{i}(t)$ denotes the separated speech signal in time and $\Phi_{m}$ represents the phase of the mixture and $\text{STFT}^{-1}$ is the inverse short-time Fourier transform operation that transforms the complex spectrogram into its corresponding time domain representation. Also, $\odot$ represents the element-wise multiplication operation and the division is also element-wise.
+
+\begin{figure*}[ht!]
+\centering
+  \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\linewidth]{Figs/SeparationPerformance.png}
+  \caption{...}~\label{fig:separation_performance}
+\end{figure*}
 
 \section{Experiments}
 \label{sec:experiments}
-We now describe the experiments used to evaluate our auto-encoder based convolutive audio models. We do so by comparing the separation performance of these models to the neural network based models proposed in~\cite{}(**ICASSP paper**). For a uniform experimental setup, we apply a separation scheme described in~\ref{sec:ss} to both the models. We compare the performance in terms of median BSS\_eval metrics~\cite{}(**BSS eval paper**) viz., signal-to-distortion (SDR), signal-to-interference (SIR) and signal-to-artifact ratio (SAR) parameters. We also compare the median intelligibility scores in terms of the STOI index~\cite{}(**STOI paper**). To compare these models, we use the TIMIT corpus~\cite{} (**Timit reference**). To form these mixtures, we randomly select a pair of male-female speakers from the TIMIT corpus. Of the $10$ utterances available for each speaker, one utterance is randomly selected for each speaker. These two selected utterances are mixed at $0 dB$ to generate the testing mixture. For the evaluation, we generate $20$ such mixtures and compare the models for different parameter configurations. As the pre-processing step, we apply a $1024$ point short-time Fourier transform representation with a hop of $25\%$. The magnitude spectrogram is then given as an input to the network. 
+We now describe the experimental setup used to evaluate our auto-encoder based convolutive audio models. We do so by comparing the separation performance of these models to the neural network based models proposed in~\cite{}(**ICASSP paper**). For a uniform experimental setup, we apply a separation scheme described in~\ref{sec:ss} to both the models. We compare the performance in terms of median BSS\_eval metrics~\cite{}(**BSS eval paper**) viz., signal-to-distortion (SDR), signal-to-interference (SIR) and signal-to-artifact ratio (SAR) parameters. We also compare the median intelligibility scores in terms of the STOI index~\cite{}(**STOI paper**). To compare these models, we use the TIMIT corpus~\cite{} (**Timit reference**). To form these mixtures, we randomly select a pair of male-female speakers from the TIMIT corpus. Of the $10$ utterances available for each speaker, one utterance is randomly selected for each speaker. These two selected utterances are mixed at $0 dB$ to generate the testing mixture. For the evaluation, we generate $20$ such mixtures and compare the models for different parameter configurations. As the pre-processing step, we apply a $1024$ point short-time Fourier transform representation with a hop of $25\%$. The magnitude spectrogram is then given as an input to the network. 
 
 We perform these evaluations at multiple parameter configurations with varying values for decomposition rank and filter size.
 
 *** Talk about how you vary or select the values of K and T***
 
-\subsection{Experimental setup}
-\label{subsec:setup}
 
 \subsection{Results and Discussion}
 \label{subsec:results}
