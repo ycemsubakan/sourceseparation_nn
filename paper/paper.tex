@@ -93,6 +93,12 @@ Spectrograms of speech and audio signals incorporate temporal dependencies that 
 
 Developing a neural network alternative to conv-NMF also results in a significant advantage in terms of model re-usability. Several neural network architectures have been recently proposed for supervised source separation~\cite{grais2017single, venkataramani2017end}. These networks are trained to learn discriminative audio models by training them on mixture spectrograms. Thus, the networks learn a decomposition that works only for a specific source-interference pair. Developing an alternative to conv-NMF allows us to learn audio-models by training neural networks on clean source spectrograms. These models can be easily re-used irrespective of the interfering component. The remainder of the paper is organized as follows. In section~\ref{sec:}, we develop an auto-encoder that can act as an equivalent to conv-NMF audio models. Section~\ref{sec:} proposes a novel approach to utilize these models for supervised source separation. We evaluate these models in terms of their separation performance in section~\ref{sec:} and conclude in section~\ref{cite:}.
 
+\begin{figure}[t]
+\centering
+  \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\linewidth]{Figs/CNN_demo.png}
+  \caption{...}~\label{fig:cnn_demo}
+\end{figure}
+
 \section{Non-negative Convolutiional Auto-encoders}
 \subsection{Network Architecture}
 \label{sec:conv-nmf}
@@ -114,34 +120,27 @@ subject to non-negativity of $\mathbf{W}_{i}$ and $\mathbf{H}$. Here, we assume 
     \text{$2^{\text{nd}}$ layer:~}\hat{\mathbf{X}}(f,t) &= g\left(\sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)\right)
     \label{eq:nmfcnncnn}
 \end{align}
-Here, the non-linearity $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wise non-linearity and ensures that the activation matrix and the reconstruction are non-negative. In our experiments, we used the soft-plus function which is given by the formula $SP(x) = \log(1+\exp(x))$ as the non-linearity. We now note some key points about the CAE. (i) The output of the encoder gives the latent representation (analog of activations in NMF \textbf{cem:we do not give the reference to corresponding equation number here} of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. To train the auto-encoder, we minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
+Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wise non-linearity and ensures that the activation matrix and the reconstruction are non-negative. In our experiments, we used the soft-plus function which is given by the formula $SP(x) = \log(1+\exp(x))$ as the non-linearity. We now note some key points about the CAE. (i) The output of the encoder gives the latent representation (analog of activations in NMF \textbf{cem:we do not give the reference to corresponding equation number here} of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. To train the auto-encoder, we minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
 \begin{equation*}
     D\left(\mathbf{X},\hat{\mathbf{X}}\right) = \sum_{i,j} \mathbf{X}(i,j)\cdot \text{log}\frac{\mathbf{X}(i,j)}{\hat{\mathbf{X}}(i,j)} - \mathbf{X}(i,j) + \hat{\mathbf{X}}(i,j)
 \end{equation*}
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-  \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\linewidth]{Figs/CNN_demo.png}
-  \caption{...}~\label{fig:cnn_demo}
-\end{figure}
+  \includegraphics[clip, trim = 3cm 2.4cm 3cm 2.1cm, width=\linewidth, height = 0.7\columnwidth]{Figs/Bases.eps}
+  \caption{Decoder filters obtained by training the CAE on magnitude-spectrograms of utterances of a male speaker. This decomposition is obtained for the configuration $K = 80$ and $T = 8$. We see that the filters resemble snippets of a speech spectrogram.}~\label{fig:cnn_demo_speech}
+\end{figure*}
 
 \subsection{Practical Considerations}
 \label{subsec:practical}
-Having developed the CAE equivalent to conv-NMF, we can now begin to understand the nature of the basis and activation matrices learned by the network. To do so, we train the convolutive auto-encoder defined by~(\ref{eq:nmfcnncnn}) on a simple toy example as shown in figure~\ref{cnn_demo}. We also incorporate sparsity constraints on the activation, i.e., the output of the first CNN. We see that the CNN filter resembles a snippet of the input spectrogram. From the nature of the activation, it is clear that the encoder acts as a matched-filter and identifies the points in time when the corresponding pattern becomes active. As shown in (\ref{eq:nmfcnncnn}), the time-frequency pattern is captured by the filters of the decoder. Thus, the encoder learns the inverse-filter of the decoder.
+Having developed the CAE equivalent to conv-NMF, we can now begin to understand the nature of the basis and activation matrices learned by the network. To do so, we train the convolutive auto-encoder defined by~(\ref{eq:nmfcnncnn}) on a simple toy example as shown in figure~\ref{cnn_demo}. We also incorporate sparsity constraints on the activation, i.e., the output of the first CNN. In this example, the CNN filter resembles a snippet of the input spectrogram. We also see that the activation comprises a series of impulse trains. Thus, the encoder acts as a matched-filter and identifies the points in time when the corresponding pattern becomes active. As shown in (\ref{eq:nmfcnncnn}), the time-frequency pattern is captured by the filters of the decoder. Given the nature of the activation we see that the encoder attempts to learn the inverse filter to the decoder. Figure~\ref{fig:cnn_demo_speech} shows the decoder filters obtained by training the CAE on speech utterances of a male speaker. Similar to the previous toy-example, the decoder filters learn patterns that resemble snippets of a speech spectrogram. 
 
-% The approximation $\hat X$ for a given spectrogram $X$ is computed as follows: 
-
-% \begin{align}
-% 	\hat H(k,t) =& \sigma_1\left ( \sum_{f,t'} X(f,t-t') F_e(f,t',k) \right ) \notag \\
-% 	\hat X(f,t) =& \sigma_2 \left ( \sum_k \sum_{t'} \hat H(k,t-t') F_d(f, t',k) \right )
-% \end{align}
-
-
+The decoder CNN can be interpreted as a finite impulse response~(FIR) filter. The encoder attempts to approximate the inverse of the decoder FIR filter as an FIR filter. From our knowledge of signal processing, it can be shown that the inverse filter of an FIR filter has an infinite impulse response~(IIR)~\cite{} (**Give reference**). Thus, approximating the encoder as an FIR filter or a CNN will hinder the decoder from learning patterns that are invertible only by an IIR filter. One such example is shown in figure~\ref{fig:}. Therefore, we explore using a Recurrent Neural Network~(RNN) to get an IIR encoder.
 
 \section{Using an Infinite Impulse Response (IIR) filter in the encoder}
 \label{sec:rnncnn}
 
-As we have discussed above, the encoder part acts as the inverse filter to the decoder. We can think of a convolutional networks as a filter with a finite impulse response (FIR). As known from DSP theory, the inverse of an FIR filter is an IIR filter. Therefore, we explore using a Recurrent Neural Network to get an IIR encoder. The encoder equation is obtained as follows: 
+As discussed above, the encoder part acts as the inverse filter to the decoder. We can think of a CNN as a filter with a finite impulse response. As known from DSP theory, the inverse of an FIR filter is an IIR filter. To the best of our knowledge, this results in a novel RNN-CNN auto-encoder architecture. In the remainder of the paper, we will refer to this auto-encoder as a Recurrent-Convolutive Auto-encoder~(RCAE). The encoder RNN equation is obtained as follows: 
 
 \begin{align}
   \mathbf Z(k_1, t, i) =& g\Bigg( \sum_{k_2}\mathbf W^i(k_1,k_2 ) \mathbf Z(k_2, t-1, i) + \notag \\
