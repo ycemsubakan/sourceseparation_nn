@@ -9,7 +9,7 @@ import sklearn.feature_extraction.text as ft
 import itertools
 import sys
 import os
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import scipy.io.wavfile as wavfile
 from music_utilities import *
 
@@ -285,6 +285,8 @@ class rnn(object):
             #define the cost         
             eps = 1e-16
             cost = tf.reduce_mean( y*(tf.log( y + eps ) - tf.log( yhat + eps ))  - y + yhat ) 
+            if d['task'] == 'toy_example':
+                cost = cost + d['sparsity_coef']*tf.reduce_sum(hhat)
 
             #define the optimizer
             if d['optimizer'] == 'Adam':
@@ -314,6 +316,9 @@ class rnn(object):
                              'relevant_inds':relevant_inds,
                              'targets':targets,
                              }
+
+            if d['task'] == 'toy_example':
+                graph_handles.update({'all_variables': tvars})
                                            
             return graph_handles
 
@@ -634,17 +639,26 @@ class rnn(object):
 
         Hhat, Yhat = sess.run([rnn_handles['h'], rnn_handles['preds']], feed) 
 
+        pdb.set_trace()
+        if d['task' ] == 'toy_example':
+            all_variables = rnn_handles['all_variables']
+            
+            for var in all_variables:
+                if 'decoder/fltr' in var.name:
+                    filter_weights = sess.run(var, feed).squeeze()
+                    filter_weights = np.transpose(filter_weights, [2, 0, 1])
+
+        pdb.set_trace()
+
         return all_times, tr_logls, test_logls, valid_logls
 
     def input_optimizer(self, data, rnn_handles, sess):
         d = self.model_specs # unpack the variables 
     
         tr = SimpleDataIterator(data, num_buckets = d['num_buckets'])
-        #tst = SimpleDataIterator(data['Test'])
-        #valid = SimpleDataIterator(data['Validation'])
-
+        
         all_times, tr_logls, test_logls, valid_logls = [], [], [], [] 
-        for ep in range(2*d['EP']):
+        for ep in range(d['EP']):
             t1, tr_logl = time.time(), []
             while tr.epochs == ep:
                 trb = tr.next_batch(
@@ -667,15 +681,6 @@ class rnn(object):
         
         y1hat = sess.run(rnn_handles['y1hat'],feed).transpose()
         y2hat = sess.run(rnn_handles['y2hat'],feed).transpose()
-
-        #tvars = tf.trainable_variables()
-        #x1hat = sess.run(tvars[0]).transpose([1,2,0])
-        #x1hat = list(x1hat)
-        #x1hat = np.concatenate(x1hat, axis = 1)
-
-        #x2hat = sess.run(tvars[1]).transpose([1,2,0])
-        #x2hat = list(x2hat)
-        #x2hat = np.concatenate(x2hat, axis = 1)
 
         return y1hat, y2hat
 
@@ -762,7 +767,7 @@ def load_data(dictionary):
         mapping_mode = 'seq2seq'
         iterator = 'SimpleDataIterator'
 
-        parameters = {'batchsize1':5,
+        parameters = {'batchsize1':2,
                       'L1':L1,'L2':L2,
                       'outstage':outstage,
                       'mapping_mode':mapping_mode,

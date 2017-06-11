@@ -101,6 +101,8 @@ def model_driver(d,data):
             all_times, tr_logls, _, _ = rnn1.optimizer(data = data, 
                     rnn_handles = rnn1_handles, sess = sess)
 
+            
+
 
 def main(dictionary):
     #set the model categories
@@ -199,7 +201,7 @@ def main(dictionary):
 #import matplotlib.pyplot as plt
 wform = 'block_diagonal'# either diagonal, block_diagonal or full
 input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is for numpy, second is for tensorflow 
-            'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
+            'task' : 'toy_example', #this helps us how to load the data with the load_data function in rnns.py 
             'data' : 'timit', #the dataset, options are inside the load_data function 
             'encoder': 'mb_mod_lstm', #options are: feed_forward, convolutive, mb_mod_lstm
             'decoder': 'convolutive',
@@ -207,9 +209,9 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'wform_global' : wform,
             'num_configs' : 60, #number of hyper parameter configurations to be tried 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
-            'EP' : 2000, #number of epochs per run 
+            'EP' : 200, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
-            'device' : 'gpu:0', #the device to be used in the computations 
+            'device' : 'gpu:1', #the device to be used in the computations 
             'server': socket.gethostname(),
             'verbose': True, #this prints out the batch location
             'load_hparams': True, #this loads hyper-parameters from a results file
@@ -221,6 +223,7 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'optimizer':'RMSProp', #options are, Adam, RMSProp, Adadelta
             'activation':'softplus',
             'separation_method':'complete',
+            'sparsity_coef': 0,   # sparsity tradeoff parameter (only used for toy examples)
             'notes':''} 
 
 perfs = main(input_dictionary)
