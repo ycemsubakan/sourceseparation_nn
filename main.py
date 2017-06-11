@@ -96,7 +96,6 @@ def model_driver(d,data):
             rnn1 = rnn( model_specs = d, initializer = d['init'], model_num = 1)
             rnn1_handles = rnn1.build_graph()  
         
-        pdb.set_trace()
         with tf.Session(config = config) as sess:
             sess.run(tf.initialize_all_variables())
             all_times, tr_logls, _, _ = rnn1.optimizer(data = data, 
@@ -160,7 +159,7 @@ def main(dictionary):
                 try: # Sometimes resources may get exhausted, this exception handles that 
                     dictionary.update({'LR': lr, 
                                         'K': K,
-                                        'K_in':10, # include this in search later
+                                        'K_in': 9, # include this in search later
                                         'num_layers': num_layers,
                                         'min_params': min_params,
                                         'max_params': max_params,
@@ -198,11 +197,11 @@ def main(dictionary):
 
 
 #import matplotlib.pyplot as plt
-wform = 'full'# either diagonal or full
+wform = 'block_diagonal'# either diagonal, block_diagonal or full
 input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is for numpy, second is for tensorflow 
-            'task' : 'toy_example', #this helps us how to load the data with the load_data function in rnns.py 
+            'task' : 'source_sep', #this helps us how to load the data with the load_data function in rnns.py 
             'data' : 'timit', #the dataset, options are inside the load_data function 
-            'encoder': 'convolutive', #options are: feed_forward, convolutive, mb_mod_lstm
+            'encoder': 'mb_mod_lstm', #options are: feed_forward, convolutive, mb_mod_lstm
             'decoder': 'convolutive',
             'wform' : wform, 
             'wform_global' : wform,
@@ -210,7 +209,7 @@ input_dictionary = {'seedin' : [1144, 1521], #setting the random seed. First is 
             'start' : 0,  #this is used to start from a certain point (can be useful with fixed seed, or when hyper-parameters are loaded) 
             'EP' : 2000, #number of epochs per run 
             'dropout' : [1, 1], #first is the input second is the output keep probability 
-            'device' : 'gpu:2', #the device to be used in the computations 
+            'device' : 'gpu:0', #the device to be used in the computations 
             'server': socket.gethostname(),
             'verbose': True, #this prints out the batch location
             'load_hparams': True, #this loads hyper-parameters from a results file

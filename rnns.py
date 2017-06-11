@@ -17,8 +17,9 @@ from music_utilities import *
 class ModLSTMCell(tf.contrib.rnn.RNNCell):
     """Modified LSTM Cell """
 
-    def __init__(self, num_units, initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32), wform = 'diagonal', input_opt = False, model_num = None):
+    def __init__(self, num_units, initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32), wform = 'diagonal', input_opt = False, model_num = None, num_rnns = 1):
         self._num_units = num_units
+        self._num_rnns = num_rnns
         self.init = initializer
         self.wform = wform 
         self.input_opt = input_opt
@@ -26,11 +27,12 @@ class ModLSTMCell(tf.contrib.rnn.RNNCell):
 
     @property
     def state_size(self):
-        return tf.contrib.rnn.LSTMStateTuple(self._num_units, self._num_units)
+        return tf.contrib.rnn.LSTMStateTuple(self._num_units*self._num_rnns, 
+                                             self._num_units*self._num_rnns)
 
     @property
     def output_size(self):
-        return self._num_units
+        return self._num_units*self._num_rnns
 
     def __call__(self, inputs, state, scope=None):
         with tf.variable_scope(scope or type(self).__name__):  # "GRUCell"
@@ -38,14 +40,34 @@ class ModLSTMCell(tf.contrib.rnn.RNNCell):
             c, h = state
             init = self.init
             self.L1 = inputs.get_shape().as_list()[1]
-           
-            mats, biases = self.get_params_parallel()
-            if self.wform == 'full' or self.wform == 'diag_to_full':
-                
+            
+            if self.wform == 'full':
+                mats, biases = self.get_params_parallel()
+            elif self.wform == 'block_diagonal':
+                Ws, Us, biases = self.get_params_parallel()
+            
+            if self.wform == 'full':                 
                 res = tf.matmul(tf.concat([h,inputs],axis=1),mats)
                 res_wbiases = tf.nn.bias_add(res, biases)
            
-                i,j,f,o = tf.split(res_wbiases,num_or_size_splits=4,axis=1) 
+                i,j,f,o = tf.split(res_wbiases, num_or_size_splits=4, axis=1) 
+            elif self.wform == 'block_diagonal':
+                h = tf.split(h, num_or_size_splits = int(self._num_rnns), 
+                            axis=1)  
+                c = tf.split(c, num_or_size_splits = int(self._num_rnns), 
+                            axis=1)  
+
+                h, c = tf.stack(h, axis = 2), tf.stack(c, axis = 2)
+
+                Wres = tf.einsum('bik,ijk->bjk', h, Ws) 
+                Ures = tf.einsum('bl,ljk->bjk', inputs, Us)
+
+                res = Wres + Ures
+                #biases = tf.tile(biases, [1, inputs.get_shape().as_list()[0]])
+                #biases = tf.transpose(biases, [2, 0, 1])
+                res_wbiases = res + biases
+
+                i, j, f, o = tf.split(res_wbiases, num_or_size_splits=4, axis=1) 
             elif self.wform == 'diagonal':
                 h_concat = tf.concat([h,h,h,h],axis=1)
 
@@ -56,14 +78,23 @@ class ModLSTMCell(tf.contrib.rnn.RNNCell):
                 res = tf.add(W_res,U_res)
                 res_wbiases = tf.nn.bias_add(res, biases)
 
-                i,j,f,o = tf.split(res_wbiases,num_or_size_splits=4,axis=1) 
+                i,j,f,o = tf.split(res_wbiases, num_or_size_splits=4, axis=1) 
                          
             new_c = (c * tf.nn.sigmoid(f) + tf.nn.sigmoid(i)*tf.nn.tanh(j))
-
             new_h = tf.nn.tanh(new_c) * tf.nn.sigmoid(o)
+
+            
+            new_c = tf.split(new_c, num_or_size_splits=int(self._num_rnns)
+                            ,axis=2)
+            new_c = tf.squeeze(tf.concat(new_c, axis=1))
+
+            
+            new_h = tf.split(new_h, num_or_size_splits=int(self._num_rnns)
+                            ,axis=2)
+            new_h = tf.squeeze(tf.concat(new_h, axis=1))
+            
             new_state = tf.contrib.rnn.LSTMStateTuple(new_c, new_h)
         return new_h, new_state
-
 
     def get_params_parallel(self):
         if self.input_opt:
@@ -82,36 +113,53 @@ class ModLSTMCell(tf.contrib.rnn.RNNCell):
 
                     elif '/biases' in var[0]:
                         biases = tf.constant( var[1] )
-                        
+            
+                return mats, biases
 
-                #mats = tf.constant(mats)  
-                #biases = tf.constant(biases)
+            elif self.wform == 'block_diagonal':           
 
+                var_scope = 'model' + str(self.model_num) + '/' + tf.get_variable_scope().name
+                #.name.replace('rnn2/','')
+                
+                #first filtering 
+                vars_to_use = [var for var in self.init if var_scope in var[0]]  
 
-            return mats, biases
+                for var in vars_to_use:
+                    if '/Ws' in var[0]:
+                        Ws = tf.constant( var[1] )               
 
+                    elif '/Us' in var[0]:
+                        Us = tf.constant( var[1] )
+
+                    elif '/biases' in var[0]:
+                        biases = tf.constant( var[1] )
+
+                return Ws, Us, biases
 
         else:
             if self.wform == 'full':
                 mats = tf.get_variable("mats", 
-                        shape = [self._num_units+self.L1,self._num_units*4], 
+                        shape = [self._num_units+self.L1, self._num_units*4], 
                         initializer = self.init )   
                 biases = tf.get_variable("biases", 
                         shape = [self._num_units*4], 
                         initializer = self.init )   
-            elif self.wform == 'diagonal':
-                Ws = tf.get_variable("Ws", 
-                        shape = [1,self._num_units*4], 
-                        initializer = self.init )   
-                Umats = tf.get_variable("Umats", 
-                        shape = [self.L1,self._num_units*4], 
-                        initializer = self.init )   
+            
+                return mats, biases
+
+            elif self.wform == 'block_diagonal':
+                Ws = tf.get_variable("Ws",
+                        shape = [self._num_units, self._num_units*4, self._num_rnns], 
+                        initializer = self.init)
+                Us = tf.get_variable("Us",
+                        shape = [self.L1, self._num_units*4, self._num_rnns], 
+                        initializer = self.init)
+
                 biases = tf.get_variable("biases", 
-                        shape = [self._num_units*4], 
+                        shape = [self._num_units*4, self._num_rnns], 
                         initializer = self.init )   
-                mats = [Ws, Umats] 
-                   
-            return mats, biases
+
+                return Ws, Us, biases
 
 class rnn(object):
     """This class has the build_graph function  that builds the rnn computation graph, and the optimizer that optimizes the model parameters given the graph handle and the data""" 
@@ -308,39 +356,43 @@ class rnn(object):
             
             return outputs
 
+
         elif model in d['mult_basis_rnns']:
-            x_tiled = tf.tile(x, [1, 1, K]) 
-            
+            #x_tiled = tf.tile(x, [1, 1, K]) 
+           
             if self.input_opt: # If we are building the separation graph
                 if model == 'mb_mod_lstm': 
-                    cell = ModLSTMCell(d['K_in']*K, initializer = self.initializer,
+                    cell = ModLSTMCell(d['K_in'], initializer = self.initializer,
                             input_opt = self.input_opt, 
-                            wform = d['wform'], model_num = def_model_num)   
+                            wform = d['wform'], 
+                            model_num = def_model_num,
+                            num_rnns = K)   
                 elif model == 'mb_gru':
                     cell = tf.contrib.rnn.GRUCell(d['K_in']*K)  
             else: # If we are building the training graph
                 initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=2, dtype=tf.float32)
                 if model == 'mb_mod_lstm': 
-                    cell = ModLSTMCell(d['K_in']*K, initializer = initializer,
-                            input_opt = self.input_opt, wform = d['wform'])   
-                elif model == 'mb_gru':
-                    cell = tf.contrib.rnn.GRUCell(d['K_in']*K)  
+                    cell = ModLSTMCell(d['K_in'], initializer = initializer,
+                            input_opt = self.input_opt, 
+                            wform = d['wform'],
+                            num_rnns = K)   
 
             cell = tf.contrib.rnn.DropoutWrapper(cell, input_keep_prob=p1)
             cell = tf.contrib.rnn.MultiRNNCell([cell] * num_layers)
             cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=p2)
 
-            outputs, _= tf.nn.dynamic_rnn(cell, x_tiled, dtype=tf.float32, 
+            outputs, _= tf.nn.dynamic_rnn(cell, x, dtype=tf.float32, 
                     time_major = True, sequence_length = seqlens )
 
             outputs = tf.transpose(outputs, [1,0,2] ) 
             outputs = tf.unstack(outputs,axis = 0)
             outputs = tf.concat(outputs, axis = 0)
 
-            outputs_split = tf.split(outputs, axis = 1, num_or_size_splits = int(d['K_in']))
-            outputs_stack = tf.stack(outputs_split)
-
-            outputs = tf.reduce_sum( outputs_stack, axis = 0) 
+            outputs_split = tf.split(outputs, 
+                                     axis=1, 
+                                     num_or_size_splits=int(K))
+            outputs_split_sum = [tf.reduce_sum(output, 1, keep_dims=True) for output in outputs_split] 
+            outputs = tf.concat(outputs_split_sum, axis=1)
 
             return outputs
 
@@ -637,7 +689,7 @@ def return_Klimits(model, wform, data):
 
     elif model in ['mb_mod_lstm']:
         min_params = 1e1; max_params = 7e7 
-        K_min, K_max = 10, 30 
+        K_min, K_max = 10, 100 
 
     elif model == 'feed_forward':
         min_params = 1e1; max_params = 7e7 
@@ -669,12 +721,11 @@ def generate_random_hyperparams(lr_min, lr_max, K_min, K_max, num_layers_min, nu
         Krange = np.tile(Krange, [int(num_configs/len(Krange)),1 ]).transpose()
         Krange = Krange.reshape(-1)
         K = Krange[load_hparams[1]]
-        # pdb.set_trace()
+        
         set_seed = False
         if (load_hparams[1]==0):
             set_seed = True
         elif (load_hparams[1]>0):
-            # pdb.set_trace()
             if ( np.abs(Krange[(load_hparams[1])] - Krange[(load_hparams[1]-1)]) > 0):
                 set_seed = True
         
@@ -711,7 +762,7 @@ def load_data(dictionary):
         mapping_mode = 'seq2seq'
         iterator = 'SimpleDataIterator'
 
-        parameters = {'batchsize1':T,
+        parameters = {'batchsize1':5,
                       'L1':L1,'L2':L2,
                       'outstage':outstage,
                       'mapping_mode':mapping_mode,
