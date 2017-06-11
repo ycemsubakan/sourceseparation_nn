@@ -107,14 +107,14 @@ Here, $\mathbf{W}_{i} \in \mathbb{R}_{M \times T}^{\geq0}$ acts as the $i^{\text
     \text{$2^{\text{nd}}$ layer:~}\hat{\mathbf{X}}(f,t) &= \sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)
     \label{eq:nmfcnncnn}
 \end{align}
-subject to non-negativity of $\mathbf{W}_{i}$ and $\mathbf{H}$. Here, we assume that the convolutional layer filters~$\mathbf{W},~\mathbf{W}^{\ddagger}$ have a size of $M\times T$ where, $T$ represents the depth of the convolution and $M$ denotes the height of the input matrix~$\mathbf{X}$. In this representation, $\mathbf{W}_{i}$ and $\mathbf{H}$ correspond to the $i^{\text{th}}$ basis matrix and the activation matrix respectively. The filters of the first convolutional neural network~(CNN) act as inverse filters in defining the auto-encoder. In the remainder of this section, we will refer to the first convolutional layer as the ``encoder'' that estimates a code from the input representation. The second CNN layer generates an approximation of the input from the code and will be referred to as the ``decoder''. We can simplify the non-negativity constraints by incorporating a non-linearity into the definitions of the encoder and the decoder. Thus,
+subject to non-negativity of $\mathbf{W}_{i}$ and $\mathbf{H}$. Here, we assume that the convolutional layer filters~$\mathbf{W},~\mathbf{W}^{\ddagger}$ have a size of $M\times T$ where, $T$ represents the depth of the convolution and $M$ denotes the height of the input matrix~$\mathbf{X}$. In this representation, $\mathbf{W}_{i}$ and $\mathbf{H}$ correspond to the $i^{\text{th}}$ basis matrix and the activation matrix respectively. The filters of the first convolutional neural network~(CNN) act as inverse filters in defining the auto-encoder. In the remainder of this section, we will refer to the first convolutional layer as the ``encoder'' that estimates a code from the input representation. The second CNN layer generates an approximation of the input from the code and will be referred to as the ``decoder''. We can satisfy the non-negativity constraints by incorporating a non-linearity into the definitions of the encoder and the decoder. Thus,
 
 \begin{align}
     \text{$1^{\text{st}}$ layer:~}\mathbf{H}(i,t) &= g\left(\sum_{j=0}^{M-1} \sum_{k=0}^{T-1} \mathbf{W}_{i}^{\ddagger}(j,k)\mathbf{X}(j,t-k)\right) \\
     \text{$2^{\text{nd}}$ layer:~}\hat{\mathbf{X}}(f,t) &= g\left(\sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)\right)
     \label{eq:nmfcnncnn}
 \end{align}
-Here, the non-linearity $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wise non-linearity and ensures that the activation matrix and the reconstruction are non-negative. In this paper, we use the rectified-linear unit as the non-linearity. We now note some key points about the CAE. (i) The output of the encoder gives the latent representation of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. To train the auto-encoder, we minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
+Here, the non-linearity $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wise non-linearity and ensures that the activation matrix and the reconstruction are non-negative. In our experiments, we used the soft-plus function which is given by the formula $SP(x) = \log(1+\exp(x))$ as the non-linearity. We now note some key points about the CAE. (i) The output of the encoder gives the latent representation (analog of activations in NMF \textbf{cem:we do not give the reference to corresponding equation number here} of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. To train the auto-encoder, we minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
 \begin{equation*}
     D\left(\mathbf{X},\hat{\mathbf{X}}\right) = \sum_{i,j} \mathbf{X}(i,j)\cdot \text{log}\frac{\mathbf{X}(i,j)}{\hat{\mathbf{X}}(i,j)} - \mathbf{X}(i,j) + \hat{\mathbf{X}}(i,j)
 \end{equation*}
@@ -138,9 +138,17 @@ Having developed the CAE equivalent to conv-NMF, we can now begin to understand 
 
 
 
-\section{Extensions to infinite summation}
+\section{Using an Infinite Impulse Response (IIR) filter in the encoder}
 \label{sec:rnncnn}
 
+As we have discussed above, the encoder part acts as the inverse filter to the decoder. We can think of a convolutional networks as a filter with a finite impulse response (FIR). As known from DSP theory, the inverse of an FIR filter is an IIR filter. Therefore, we explore using a Recurrent Neural Network to get an IIR encoder. The encoder equation is obtained as follows: 
+
+\begin{align}
+  \mathbf Z(k_1, t, i) =& g\Bigg( \sum_{k_2}\mathbf W^i(k_1,k_2 ) \mathbf Z(k_2, t-1, i) + \notag \\
+  & \hspace{2cm} \sum_l \mathbf U^i(k_1,l) \mathbf X(l, t) \Bigg), \\
+  \mathbf H(i, t) =& \sum_{k_1} \mathbf Z^i(k_1, t)
+\end{align}
+where  
 
 % This is the same as CNN-CNN case, except the computation of the activations $H$. In the CNN encoder, each filter was of finite length. With RNN-CNN version, we are attempting to use an infinite length filter. The computation of $\hat H$ is as follows: 
 
