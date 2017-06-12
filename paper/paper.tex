@@ -149,29 +149,43 @@ Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wis
   \centering
   \begin{tikzpicture}[auto, node distance=2cm,>=latex']
       
-      \node [,name=input] (input) {$X$};
-      \coordinate [, name=rinput, right of=input, node distance=2cm ](rinput) {};
-	
-      \node [, right of=rinput] (controller) {$\vdots$};
-      \node [block, above of=controller,node distance=1.3cm] (up){$\mathbf W^\ddagger_1$};
-      \node [block, below of=controller,node distance=1.3cm] (rate) {$\mathbf W^\ddagger_K$};
-      \node [sum, right of=controller,node distance=2cm] (sum2) {CT};
-      
-      \node [block, right of=sum2,node distance=2cm] (system) {$\frac{a_{\beta 2}}{s+a_{\beta 1}}$};
-      \node [output, right of=system, node distance=2cm] (output) {};
-      \node [tmp, below of=controller] (tmp1){$H(s)$};
-      
+      \node [,name=input] (input) {$\mathbf X$};
+      \coordinate [, name=rinput, right of=input, node distance=1.3cm ](rinput) {};
+      \node [block, right of=rinput, node distance=1.3cm] (controller) {$\vdots$};
+      \node [sum, right of=controller, node distance=2cm] (controllers){$\sum_j$};
+      \node [block, above of=controller,node distance=1.3cm] (up){$\mathbf X *\mathbf W^\ddagger_1$};
+      \node [sum, right of=up, node distance=2cm] (ups) {$\sum_j$};
+      \node [block, below of=controller,node distance=1.3cm] (rate) {$\mathbf X*\mathbf W^\ddagger_K$};
+      \node [sum, right of=rate, node distance=2cm] (rates) {$\sum_j$};	
+
+      \node [sum, right of=controllers,node distance=1.3cm] (sum2) {CT};
+      \node[sum, right of=sum2,node distance=2cm] (system) {$g()$};
+      \node [block, right of=system, node distance=2cm] (dec2) {$\vdots$};
+      \node [block, above of=dec2, node distance=1.3cm] (dec1) {$\mathbf H(1, :) * \mathbf W_1$};
+      \node [block, below of=dec2, node distance=1.3cm] (dec3) {$\mathbf H(K, :) *\mathbf W_K$};
+      \node [sum, right of=dec2, node distance=2cm] (sum3) {$+$};
+      \node [sum, right of=sum3, node distance=1.3cm] (g2) {$g()$};
+      \node [,right of=g2, node distance=1.3cm] (outp) {$\widehat{\mathbf X}$};
+
+      \draw [-] (input) -- (rinput);
       \draw [->] (rinput) -- (controller); 
-      \draw [->] (controller) -- (sum2);
-      \draw [->] (sum2) -- node{$U(s)$} (system);
-     % \draw [->] (system) -- node [name=y] {$Y(s)$}(output);
+      \draw [->] (controller) -- (controllers);
+      \draw [->] (controllers) -- (sum2);
+      \draw [->] (sum2) -- (system);
       \draw [->] (rinput) |- (rate);
-      \draw [->] (rate) -| (sum2);
+      \draw [->] (rate) -- (rates);
+      \draw [->] (rates) -| (sum2);
       \draw [->] (rinput) |- (up);
-      \draw [->] (up) -| (sum2);
-      % \draw [->] (y) |- (tmp1)-| node[pos=0.99] {$-$} (sum1);
-      %\draw [->] (extra)--(sum2);
-      %\draw [->] ($(0,1.5cm)+(extra)$)node[above]{$d_{\beta 2}$} -- (extra);
+      \draw [->] (up) -- (ups);
+      \draw [->] (ups) -| (sum2);
+      \draw [->] (system) -- node {$\mathbf H(.,:)$} (dec2);
+      \draw [->] (system) |- node {$\mathbf H(1,:)$} (dec1);
+      \draw [->] (system) |- node[anchor=north]{$\mathbf H(K,:)$} (dec3);
+      \draw [->] (dec1) -| (sum3);
+      \draw [->] (dec2) -- (sum3);
+      \draw [->] (dec3) -| (sum3);
+      \draw [->] (sum3) -- (g2);
+      \draw [->] (g2) -- (outp);
     \end{tikzpicture}
   \caption{Block Diagram of CNN-CNN Autoencoder} 
   \label{CNN-CNN Auto Encoder}
