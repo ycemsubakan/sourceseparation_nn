@@ -113,7 +113,7 @@ Developing a neural network alternative to conv-NMF also results in a significan
   \caption{...}~\label{fig:cnn_demo}
 \end{figure}
 
-\section{Non-negative Convolutiional Auto-encoders}
+\section{Non-negative Convolutional Auto-encoders}
 \subsection{Network Architecture}
 \label{sec:conv-nmf}
 The convolutive NMF model~\cite{smaragdis2007convolutive} approximates a non-negative matrix~$\mathbf{X}\in \mathbb{R}_{M \times N}^{\geq0}$ as,
@@ -123,8 +123,8 @@ The convolutive NMF model~\cite{smaragdis2007convolutive} approximates a non-neg
 Here, $\mathbf{W}_{i} \in \mathbb{R}_{M \times T}^{\geq0}$ acts as the $i^{\text{th}}$ basis matrix and $\mathbf{H} \in \mathbb{R}_{r \times N}^{\geq0}$ contains the corresponding weights. The notation $\mathbf{X}(i,j)$ represents the element of $\mathbf{X}$ indexed by the $i^{\text{th}}$ row and the $j^{\text{th}}$ column. We can interpret this operation as a two-layer convolutional auto-encoder~(CAE) as follows,
 
 \begin{align}
-    \text{$1^{\text{st}}$ layer:~}\mathbf{H}(i,t) &= \sum_{j=0}^{M-1} \sum_{k=0}^{T-1} \mathbf{W}_{i}^{\ddagger}(j,k)\mathbf{X}(j,t-k) \\
-    \text{$2^{\text{nd}}$ layer:~}\hat{\mathbf{X}}(f,t) &= \sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)
+  \text{$1^{st}$ layer:~}\mathbf{H}(i,t) &= \sum_{j=0}^{M-1} \sum_{k=0}^{T-1} \mathbf{W}_{i}^{\ddagger}(j,k)\mathbf{X}(j,t-k) \\
+  \text{$2^{nd}$ layer:~}\hat{\mathbf{X}}(f,t) &= \sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)
     \label{eq:nmfcnncnn}
 \end{align}
 subject to non-negativity of $\mathbf{W}_{i}$ and $\mathbf{H}$. Here, we assume that the convolutional layer filters~$\mathbf{W},~\mathbf{W}^{\ddagger}$ have a size of $M\times T$ where, $T$ represents the depth of the convolution and $M$ denotes the height of the input matrix~$\mathbf{X}$. In this representation, $\mathbf{W}_{i}$ and $\mathbf{H}$ correspond to the $i^{\text{th}}$ basis matrix and the activation matrix respectively. The filters of the first convolutional neural network~(CNN) act as inverse filters in defining the auto-encoder. In the remainder of this section, we will refer to the first convolutional layer as the ``encoder'' that estimates a code from the input representation. The second CNN layer generates an approximation of the input from the code and will be referred to as the ``decoder''. We can satisfy the non-negativity constraints by incorporating a non-linearity into the definitions of the encoder and the decoder. Thus,
@@ -134,18 +134,12 @@ subject to non-negativity of $\mathbf{W}_{i}$ and $\mathbf{H}$. Here, we assume 
     \text{$2^{\text{nd}}$ layer:~}\hat{\mathbf{X}}(f,t) &= g\left(\sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)\right)
     \label{eq:nmfcnncnn}
 \end{align}
-Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wise non-linearity and ensures that the activation matrix and the reconstruction are non-negative. In our experiments, we used the soft-plus function which is given by the formula $SP(x) = \log(1+\exp(x))$ as the non-linearity. We now note some key points about the CAE. (i) The output of the encoder gives the latent representation (analog of activations in NMF \textbf{cem:we do not give the reference to corresponding equation number here} of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. To train the auto-encoder, we minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
+Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wise non-linearity and ensures that the activation matrix and the reconstruction are non-negative. The block diagram of the whole CNN-CNN encoder is given in Figure \ref{diag:cnncnn}. In our experiments, we used the soft-plus function which is given by the formula $g(x) = \log(1+\exp(x))$ as the non-linearity. We now note some key points about the CAE. (i) The output of the encoder gives the latent representation (analog of activations in NMF \textbf{cem:we do not give the reference to corresponding equation number here} of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. To train the auto-encoder, we minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
 \begin{equation*}
     D\left(\mathbf{X},\hat{\mathbf{X}}\right) = \sum_{i,j} \mathbf{X}(i,j)\cdot \text{log}\frac{\mathbf{X}(i,j)}{\hat{\mathbf{X}}(i,j)} - \mathbf{X}(i,j) + \hat{\mathbf{X}}(i,j)
 \end{equation*}
 
-\begin{figure}[ht!]
-\centering
-  \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\columnwidth, height = 0.8\columnwidth]{Figs/Bases.png}
-  \caption{A subset of decoder filters obtained by training the CAE on magnitude-spectrograms of utterances of a male speaker. This decomposition is obtained for the configuration $K = 80$ and $T = 8$. We see that the filters resemble snippets of a speech spectrogram.}~\label{fig:cnn_demo_speech}
-\end{figure}
-
-\begin{figure*}
+\begin{figure*} [t]
   \centering
   \begin{tikzpicture}[auto, node distance=2cm,>=latex']
       
@@ -158,8 +152,8 @@ Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wis
       \node [block, below of=controller,node distance=1.3cm] (rate) {$\mathbf X*\mathbf W^\ddagger_K$};
       \node [sum, right of=rate, node distance=2cm] (rates) {$\sum_j$};	
 
-      \node [sum, right of=controllers,node distance=1.3cm] (sum2) {CT};
-      \node[sum, right of=sum2,node distance=2cm] (system) {$g()$};
+      \node [sum, right of=controllers,node distance=1.3cm] (sum2) {$g()$};
+      \coordinate[, right of=sum2,node distance=2cm] (system) {};
       \node [block, right of=system, node distance=2cm] (dec2) {$\vdots$};
       \node [block, above of=dec2, node distance=1.3cm] (dec1) {$\mathbf H(1, :) * \mathbf W_1$};
       \node [block, below of=dec2, node distance=1.3cm] (dec3) {$\mathbf H(K, :) *\mathbf W_K$};
@@ -171,14 +165,14 @@ Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wis
       \draw [->] (rinput) -- (controller); 
       \draw [->] (controller) -- (controllers);
       \draw [->] (controllers) -- (sum2);
-      \draw [->] (sum2) -- (system);
+      \draw [-] (sum2) --node{$\mathbf H$} (system);
       \draw [->] (rinput) |- (rate);
       \draw [->] (rate) -- (rates);
       \draw [->] (rates) -| (sum2);
       \draw [->] (rinput) |- (up);
       \draw [->] (up) -- (ups);
       \draw [->] (ups) -| (sum2);
-      \draw [->] (system) -- node {$\mathbf H(.,:)$} (dec2);
+      \draw [->] (system) -- node {} (dec2);
       \draw [->] (system) |- node {$\mathbf H(1,:)$} (dec1);
       \draw [->] (system) |- node[anchor=north]{$\mathbf H(K,:)$} (dec3);
       \draw [->] (dec1) -| (sum3);
@@ -188,17 +182,24 @@ Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wis
       \draw [->] (g2) -- (outp);
     \end{tikzpicture}
   \caption{Block Diagram of CNN-CNN Autoencoder} 
-  \label{CNN-CNN Auto Encoder}
+  \label{diag:cnncnn}
 \end{figure*}
+
+
+\begin{figure}[ht!]
+\centering
+  \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\columnwidth, height = 0.8\columnwidth]{Figs/Bases.png}
+  \caption{A subset of decoder filters obtained by training the CAE on magnitude-spectrograms of utterances of a male speaker. This decomposition is obtained for the configuration $K = 80$ and $T = 8$. We see that the filters resemble snippets of a speech spectrogram.}~\label{fig:cnn_demo_speech}
+\end{figure}
 
 
 \subsection{Practical Considerations}
 \label{subsec:practical}
 Having developed the CAE equivalent to conv-NMF, we can now begin to understand the nature of the basis and activation matrices learned by the network. To do so, we train the convolutive auto-encoder defined by~(\ref{eq:nmfcnncnn}) on a simple toy example as shown in figure~\ref{cnn_demo}. We also incorporate sparsity constraints on the activation, i.e., the output of the first CNN. In this example, the CNN filter resembles a snippet of the input spectrogram. We also see that the activation comprises a series of impulse trains. Thus, the encoder acts as a matched-filter and identifies the points in time when the corresponding pattern becomes active. As shown in (\ref{eq:nmfcnncnn}), the time-frequency pattern is captured by the filters of the decoder. Given the nature of the activation we see that the encoder attempts to learn the inverse filter to the decoder. Figure~\ref{fig:cnn_demo_speech} shows the decoder filters obtained by training the CAE on speech utterances of a male speaker. Similar to the previous toy-example, the decoder filters learn patterns that resemble snippets of a speech spectrogram. 
 
-The decoder CNN can be interpreted as a finite impulse response~(FIR) filter. The encoder attempts to approximate the inverse of the decoder FIR filter as an FIR filter. From our knowledge of signal processing, it can be shown that the inverse filter of an FIR filter has an infinite impulse response~(IIR)~\cite{} (**Give reference**). Thus, approximating the encoder as an FIR filter or a CNN will hinder the decoder from learning patterns that are invertible only by an IIR filter. One such example is shown in figure~\ref{fig:}. Therefore, we explore using a Recurrent Neural Network~(RNN) to get an IIR encoder.
+\textbf{Cem: Impulse response concept is for linear systems. I am not too sure about using it in this context.} The decoder CNN can be interpreted as a finite impulse response~(FIR) filter. The encoder attempts to approximate the inverse of the decoder FIR filter as an FIR filter. From our knowledge of signal processing, it can be shown that the inverse filter of an FIR filter has an infinite impulse response~(IIR)~\cite{} (**Give reference**). Thus, approximating the encoder as an FIR filter or a CNN will hinder the decoder from learning patterns that are invertible only by an IIR filter. One such example is shown in figure~\ref{fig:}. Therefore, we explore using a Recurrent Neural Network~(RNN) to get an IIR encoder.
 
-\section{Using an Infinite Impulse Response (IIR) filter in the encoder}
+\section{Using a recurrent filter in the encoder}
 \label{sec:rnncnn}
 
 %As discussed above, the encoder part acts as the inverse filter to the decoder. We can think of a CNN as a filter with a finite impulse response. As known from DSP theory, the inverse of an FIR filter is an IIR filter. To the best of our knowledge, this results in a novel RNN-CNN auto-encoder architecture. In the remainder of the paper, we will refer to this auto-encoder as a Recurrent-Convolutive Auto-encoder~(RCAE). 
@@ -215,6 +216,43 @@ where $\mathbf Z(:, t, k) \in \mathbb R^{K_{in}}$ denotes the latent state vecto
 \begin{align}
   \mathbf H(i, t) = \sum_{k_1=1}^{K_{in}} \mathbf Z(k_1, t, i)
 \end{align}
+
+The recurrent encoder's block diagram is given in Figure \ref{diag:rnnenc}. 
+
+\begin{figure*} [t]
+  \centering
+  \begin{tikzpicture}[auto, node distance=2cm,>=latex']
+      
+      \node [,name=input] (input) {$\mathbf X$};
+      \coordinate [, name=rinput, right of=input, node distance=1.3cm ](rinput) {};
+      \node [block, right of=rinput, node distance=1.3cm] (controller) {$\vdots$};
+      \node [sum, right of=controller, node distance=2cm] (controllers){$\sum_j$};
+      \node [block, above of=controller,node distance=1.3cm] (up){$\text{RNN}_1(\mathbf X)$};
+      \node [sum, right of=up, node distance=2cm] (ups) {$\sum_j$};
+      \node [block, below of=controller,node distance=1.3cm] (rate) {$\text{RNN}_K(\mathbf X)$};
+      \node [sum, right of=rate, node distance=2cm] (rates) {$\sum_j$};	
+
+      \node [sum, right of=controllers,node distance=1.3cm] (sum2) {$g()$};
+      \node[, right of=sum2,node distance=1.3cm] (system) {$\mathbf H$};
+      
+      \draw [-] (input) -- (rinput);
+      \draw [->] (rinput) -- (controller); 
+      \draw [->] (controller) -- (controllers);
+      \draw [->] (controllers) -- (sum2);
+      \draw [->] (sum2) --(system);
+      \draw [->] (rinput) |- (rate);
+      \draw [->] (rate) -- (rates);
+      \draw [->] (rates) -| (sum2);
+      \draw [->] (rinput) |- (up);
+      \draw [->] (up) -- (ups);
+      \draw [->] (ups) -| (sum2);
+      \end{tikzpicture}
+  \caption{Block Diagram of RNN Encoder} 
+  \label{diag:rnnenc}
+\end{figure*}
+
+
+
 
 % This is the same as CNN-CNN case, except the computation of the activations $H$. In the CNN encoder, each filter was of finite length. With RNN-CNN version, we are attempting to use an infinite length filter. The computation of $\hat H$ is as follows: 
 
