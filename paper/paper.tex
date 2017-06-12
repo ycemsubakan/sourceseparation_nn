@@ -110,7 +110,7 @@ Developing a neural network alternative to conv-NMF also results in a significan
 \begin{figure}[t]
 \centering
   \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\linewidth]{Figs/CNN_demo.png}
-  \caption{...}~\label{fig:cnn_demo}
+  \caption{Basis decomposition of a toy-illustration obtained using a CNN-CNN auto-encoder.}~\label{fig:cnn_demo}
 \end{figure}
 
 \section{Non-negative Convolutiional Auto-encoders}
@@ -134,16 +134,17 @@ subject to non-negativity of $\mathbf{W}_{i}$ and $\mathbf{H}$. Here, we assume 
     \text{$2^{\text{nd}}$ layer:~}\hat{\mathbf{X}}(f,t) &= g\left(\sum_{i=1}^{r} \sum_{k=0}^{T-1} \mathbf{W}_{i}(k,f)\cdot\mathbf{H}(i,t-k)\right)
     \label{eq:nmfcnncnn}
 \end{align}
-Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wise non-linearity and ensures that the activation matrix and the reconstruction are non-negative. In our experiments, we used the soft-plus function which is given by the formula $SP(x) = \log(1+\exp(x))$ as the non-linearity. We now note some key points about the CAE. (i) The output of the encoder gives the latent representation (analog of activations in NMF \textbf{cem:we do not give the reference to corresponding equation number here} of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. To train the auto-encoder, we minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
+Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wise non-linearity and ensures that the activation matrix and the reconstruction are non-negative. In our experiments, we used the soft-plus function which is given by the formula $SP(x) = \log(1+\exp(x))$ as the non-linearity. Based on (\ref{eq:nmfcnncnn}), we now note some key points about the CAE. (i) The output of the encoder gives the latent representation (analog of activations in NMF) of the decomposition. (ii) The weights of the decoder act as the basis vectors of the decomposition. (iii) We do not explicitly apply non-negativity constraints on the weights. Thus, the basis matrices (decoder filters) can assume negative values. To train the auto-encoder, we minimize the KL-divergence between the input spectrogram~$\mathbf{X}$ and its reconstruction~$\hat{\mathbf{X}}$ given by,
 \begin{equation*}
     D\left(\mathbf{X},\hat{\mathbf{X}}\right) = \sum_{i,j} \mathbf{X}(i,j)\cdot \text{log}\frac{\mathbf{X}(i,j)}{\hat{\mathbf{X}}(i,j)} - \mathbf{X}(i,j) + \hat{\mathbf{X}}(i,j)
 \end{equation*}
 
 \begin{figure}[ht!]
 \centering
-  \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\columnwidth, height = 0.8\columnwidth]{Figs/Bases.png}
+  \includegraphics[clip, trim = 0cm 0cm 0cm 0cm, width=\columnwidth, height = \columnwidth]{Figs/Bases.png}
   \caption{A subset of decoder filters obtained by training the CAE on magnitude-spectrograms of utterances of a male speaker. This decomposition is obtained for the configuration $K = 80$ and $T = 8$. We see that the filters resemble snippets of a speech spectrogram.}~\label{fig:cnn_demo_speech}
 \end{figure}
+Although the filters can assume negative values, the use of a non-linearity does not allow cross-cancellations across the basis elements.  
 
 \begin{figure*}
   \centering
@@ -277,7 +278,7 @@ The convolutive speech models obtained by training the RCAE also outperform the 
 
 \section{Conclusion}
 \label{sec:conclusion}
-
+In this paper, we developed and investigated the use of a convolutional auto-encoder as an alternative to learn convolutive basis decompositions of speech and audio signals. The ability of the networks to include temporal dependencies allow the auto-encoders to learn cross-frame structures in the input spectrogram. We demonstrated that this results in a significant improvement in separation performance as compared to feed-forward auto-encoder models. This approach also allows for several extensions and generalizations to convolutive audio models, that can be easily implemented using the available diversity of neural networks. One such extension considered in this paper is the use of auto-encoders formed by a cascade of recurrent and convolutive layers. Although these models are not as potent as CAE models for separation of speech mixtures, these extensions could lead to interesting non-uniform auto-encoder architectures for several applications.
 
 % References should be produced using the bibtex program from suitable
 % BiBTeX files (here: strings, refs, manuals). The IEEEbib.bst bibliography
