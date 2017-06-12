@@ -5,6 +5,8 @@
 \documentclass{article}
 \usepackage{amsmath,graphicx,mlspconf}
 \usepackage{amsfonts}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc}
 
 %Select one of the four copyright notices below. Only required for the camera paper submission
 
@@ -58,6 +60,18 @@
 %	Address C-D
 %   Email C-D}
 %
+
+
+\tikzset{
+block/.style = {draw, fill=white, rectangle, minimum height=3em, minimum width=3em},
+tmp/.style  = {coordinate}, 
+sum/.style= {draw, fill=white, circle, node distance=1cm},
+input/.style = {coordinate},
+output/.style= {coordinate},
+pinstyle/.style = {pin edge={to-,thin,black}
+}
+}
+
 \begin{document}
 %\ninept
 %
@@ -131,6 +145,39 @@ Here, the $g(.):\mathbb{R}\rightarrow \mathbb{R}^{\geq0}$ applies an element-wis
   \caption{Decoder filters obtained by training the CAE on magnitude-spectrograms of utterances of a male speaker. This decomposition is obtained for the configuration $K = 80$ and $T = 8$. We see that the filters resemble snippets of a speech spectrogram.}~\label{fig:cnn_demo_speech}
 \end{figure*}
 
+\begin{figure*}
+  \centering
+  \begin{tikzpicture}[auto, node distance=2cm,>=latex']
+      
+      \node [,name=input] (input) {$X$};
+      \coordinate [, name=rinput, right of=input, node distance=2cm ](rinput) {};
+	
+      \node [, right of=rinput] (controller) {$\vdots$};
+      \node [block, above of=controller,node distance=1.3cm] (up){$\mathbf W^\ddagger_1$};
+      \node [block, below of=controller,node distance=1.3cm] (rate) {$\mathbf W^\ddagger_K$};
+      \node [sum, right of=controller,node distance=2cm] (sum2) {CT};
+      
+      \node [block, right of=sum2,node distance=2cm] (system) {$\frac{a_{\beta 2}}{s+a_{\beta 1}}$};
+      \node [output, right of=system, node distance=2cm] (output) {};
+      \node [tmp, below of=controller] (tmp1){$H(s)$};
+      
+      \draw [->] (rinput) -- (controller); 
+      \draw [->] (controller) -- (sum2);
+      \draw [->] (sum2) -- node{$U(s)$} (system);
+     % \draw [->] (system) -- node [name=y] {$Y(s)$}(output);
+      \draw [->] (rinput) |- (rate);
+      \draw [->] (rate) -| (sum2);
+      \draw [->] (rinput) |- (up);
+      \draw [->] (up) -| (sum2);
+      % \draw [->] (y) |- (tmp1)-| node[pos=0.99] {$-$} (sum1);
+      %\draw [->] (extra)--(sum2);
+      %\draw [->] ($(0,1.5cm)+(extra)$)node[above]{$d_{\beta 2}$} -- (extra);
+    \end{tikzpicture}
+  \caption{Block Diagram of CNN-CNN Autoencoder} 
+  \label{CNN-CNN Auto Encoder}
+\end{figure*}
+
+
 \subsection{Practical Considerations}
 \label{subsec:practical}
 Having developed the CAE equivalent to conv-NMF, we can now begin to understand the nature of the basis and activation matrices learned by the network. To do so, we train the convolutive auto-encoder defined by~(\ref{eq:nmfcnncnn}) on a simple toy example as shown in figure~\ref{cnn_demo}. We also incorporate sparsity constraints on the activation, i.e., the output of the first CNN. In this example, the CNN filter resembles a snippet of the input spectrogram. We also see that the activation comprises a series of impulse trains. Thus, the encoder acts as a matched-filter and identifies the points in time when the corresponding pattern becomes active. As shown in (\ref{eq:nmfcnncnn}), the time-frequency pattern is captured by the filters of the decoder. Given the nature of the activation we see that the encoder attempts to learn the inverse filter to the decoder. Figure~\ref{fig:cnn_demo_speech} shows the decoder filters obtained by training the CAE on speech utterances of a male speaker. Similar to the previous toy-example, the decoder filters learn patterns that resemble snippets of a speech spectrogram. 
@@ -140,14 +187,20 @@ The decoder CNN can be interpreted as a finite impulse response~(FIR) filter. Th
 \section{Using an Infinite Impulse Response (IIR) filter in the encoder}
 \label{sec:rnncnn}
 
-As discussed above, the encoder part acts as the inverse filter to the decoder. We can think of a CNN as a filter with a finite impulse response. As known from DSP theory, the inverse of an FIR filter is an IIR filter. To the best of our knowledge, this results in a novel RNN-CNN auto-encoder architecture. In the remainder of the paper, we will refer to this auto-encoder as a Recurrent-Convolutive Auto-encoder~(RCAE). The encoder RNN equation is obtained as follows: 
+%As discussed above, the encoder part acts as the inverse filter to the decoder. We can think of a CNN as a filter with a finite impulse response. As known from DSP theory, the inverse of an FIR filter is an IIR filter. To the best of our knowledge, this results in a novel RNN-CNN auto-encoder architecture. In the remainder of the paper, we will refer to this auto-encoder as a Recurrent-Convolutive Auto-encoder~(RCAE). 
+
+In this section, the goal is to construct a recurrent encoder analogous to the convolutive encoder we discussed in the previous section. The potential gain of using a recurrent encoder over a finite length convolutive encoder is due to the fact that a recurrent filter in theory can capture arbitrarily long temporal dependencies. From a signal processing point of view, the motivation for going with a recurrent filter is that, the inverse of an finite length filter (the convolutive basis in the encoder) is given by a recurrent filter. We explore the idea, and obtain source separation results on the same dataset.  
+
+The way we go about building an encoder is by passing the input through $K$ separate recurrent neural networks (RNNs) (Note that $K$ was the number of filters/components in the convolutive model). The $k$'th RNN recursion in the encoder is given by the following equation:    
 
 \begin{align}
-  \mathbf Z(k_1, t, i) =& g\Bigg( \sum_{k_2}\mathbf W^i(k_1,k_2 ) \mathbf Z(k_2, t-1, i) + \notag \\
-  & \hspace{2cm} \sum_l \mathbf U^i(k_1,l) \mathbf X(l, t) \Bigg), \\
-  \mathbf H(i, t) =& \sum_{k_1} \mathbf Z^i(k_1, t)
+  \mathbf Z(k_1, t, k) =& \tanh \Bigg( \sum_{k_2 = 1}^{K_{in}} \mathbf W^k(k_1,k_2 ) \mathbf Z(k_2, t-1, k) + \notag \\
+  & \hspace{0cm} \sum_l \mathbf U^k(k_1,l) \mathbf X(l, t) \Bigg),\; k \in \{1,\dots,K\}, 
 \end{align}
-where  
+where $\mathbf Z(:, t, k) \in \mathbb R^{K_{in}}$ denotes the latent state vector of the $k$'th RNN at time $t$. We denote the hidden state dimensionality of each RNN with $K_{in}$. The recurrent and projection matrices of the $k'th$ RNN are respectively denoted with $\mathbf W^k$, and $\mathbf U^k$. Note that although the given recursion corresponds to the vanilla-RNN architecture, there is no restriction on the RNN architecture choice. In our experiments, we have used the LSTM architecture [cite]. After going through the RNN recursions, the encoder output $\mathbf H(i, t)$ is obtained by summing the RNN outputs over the first dimension:
+\begin{align}
+  \mathbf H(i, t) = \sum_{k_1=1}^{K_{in}} \mathbf Z(k_1, t, i)
+\end{align}
 
 % This is the same as CNN-CNN case, except the computation of the activations $H$. In the CNN encoder, each filter was of finite length. With RNN-CNN version, we are attempting to use an infinite length filter. The computation of $\hat H$ is as follows: 
 
